@@ -3,6 +3,7 @@ import { checkDuplicate } from "../../utils/checkDuplicate.js";
 
 export async function useIgdbForDlcAPI(req, res) {
   try {
+    const userId = req.user.id;
     const igdbId = req.query.igdbId;
     const query = `
 			where id = ${igdbId};
@@ -47,7 +48,8 @@ export async function useIgdbForDlcAPI(req, res) {
     const isDuplicate = await checkDuplicate(
       "games",
       "igdb_id",
-      processedDlc.igdbId
+      processedDlc.igdbId,
+      userId
     );
     if (isDuplicate) {
       return res.status(409).json({
