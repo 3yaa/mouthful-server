@@ -5,6 +5,7 @@ dotenv.config();
 
 export async function useOmdbAPI(req, res) {
   try {
+    const userId = req.user.id;
     const { title, year } = req.query;
     const url = `http://www.omdbapi.com/?apikey=${
       process.env.OMDB_API_KEY
@@ -43,7 +44,8 @@ export async function useOmdbAPI(req, res) {
     const isDuplicate = await checkDuplicate(
       "movies",
       "imdb_id",
-      processedMovie.imdbId
+      processedMovie.imdbId,
+      userId
     );
     if (isDuplicate) {
       return res.status(409).json({

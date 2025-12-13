@@ -5,6 +5,7 @@ dotenv.config();
 
 export async function useTmdbSearchAPI(req, res) {
   try {
+    const userId = req.user.id;
     const { title, year } = req.query;
     const url = `https://api.themoviedb.org/3/search/tv?api_key=${
       process.env.TMDB_API_KEY
@@ -37,7 +38,8 @@ export async function useTmdbSearchAPI(req, res) {
     const isDuplicate = await checkDuplicate(
       "shows",
       "tmdb_id",
-      processedShow.tmdbId
+      processedShow.tmdbId,
+      userId
     );
     if (isDuplicate) {
       return res.status(409).json({

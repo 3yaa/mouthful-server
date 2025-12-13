@@ -5,6 +5,7 @@ dotenv.config();
 
 export async function useOpenLibraryAPI(req, res) {
   try {
+    const userId = req.user.id;
     const { query, title, limit } = req.query;
     const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
       query
@@ -41,7 +42,12 @@ export async function useOpenLibraryAPI(req, res) {
     }));
     // check for duplicate
     for (const book of processedBooks) {
-      const isDuplicate = await checkDuplicate("books", "key", book.key);
+      const isDuplicate = await checkDuplicate(
+        "books",
+        "key",
+        book.key,
+        userId
+      );
       if (isDuplicate) {
         return res.status(409).json({
           success: false,
