@@ -14,7 +14,7 @@ const convertShowToCamelCase = (show) => ({
   status: show.status,
   score: show.score,
   dateCompleted: show.date_completed,
-  lastUpdated: book.last_updated,
+  lastUpdated: show.last_updated,
   note: show.note,
   tmdbId: show.tmdb_id,
   userId: show.user_id,

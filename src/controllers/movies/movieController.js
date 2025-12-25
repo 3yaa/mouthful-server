@@ -15,7 +15,7 @@ const convertMovieToCamelCase = (movie) => ({
   status: movie.status,
   score: movie.score,
   dateCompleted: movie.date_completed,
-  lastUpdated: book.last_updated,
+  lastUpdated: movie.last_updated,
   note: movie.note,
   imdbId: movie.imdb_id,
   userId: movie.user_id,

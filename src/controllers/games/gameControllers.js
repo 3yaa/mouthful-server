@@ -14,7 +14,7 @@ const convertGameToCamelCase = (game) => ({
   status: game.status,
   score: game.score,
   dateCompleted: game.date_completed,
-  lastUpdated: book.last_updated,
+  lastUpdated: game.last_updated,
   note: game.note,
   igdbId: game.igdb_id,
   userId: game.user_id,
