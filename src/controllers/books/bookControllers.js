@@ -15,10 +15,10 @@ const convertBookToCamelCase = (book) => ({
   dateCompleted: book.date_completed,
   note: book.note,
   dateCreated: book.date_created,
+  lastUpdated: book.last_updated,
   key: book.key,
   userId: book.user_id,
 });
-
 export const getRandomBooks = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -64,7 +64,7 @@ export const getBooks = async (req, res) => {
           WHEN 'Dropped' THEN 3
           ELSE 4
         END,
-        date_created DESC
+        last_updated DESC
     `,
       [userId]
     );
@@ -121,6 +121,7 @@ export const getBook = async (req, res) => {
 
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
+  lastUpdated: "last_updated",
 };
 
 export const patchBook = async (req, res) => {
@@ -128,6 +129,7 @@ export const patchBook = async (req, res) => {
     const bookId = req.params.id;
     const userId = req.user.id;
     const updates = req.body;
+    updates.lastUpdated = new Date();
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)

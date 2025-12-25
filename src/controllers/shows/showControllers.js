@@ -14,6 +14,7 @@ const convertShowToCamelCase = (show) => ({
   status: show.status,
   score: show.score,
   dateCompleted: show.date_completed,
+  lastUpdated: book.last_updated,
   note: show.note,
   tmdbId: show.tmdb_id,
   userId: show.user_id,
@@ -65,7 +66,7 @@ export const getShows = async (req, res) => {
 					WHEN 'Dropped' THEN 4
 					ELSE 4
 				END,
-				date_created DESC
+        last_updated DESC
 		`,
       [userId]
     );
@@ -124,6 +125,7 @@ const camelToSnakeMapping = {
   curSeasonIndex: "cur_season_index",
   curEpisode: "cur_episode",
   dateCompleted: "date_completed",
+  lastUpdated: "last_updated",
 };
 
 export const patchShow = async (req, res) => {
@@ -131,6 +133,7 @@ export const patchShow = async (req, res) => {
     const showId = req.params.id;
     const userId = req.user.id;
     const updates = req.body;
+    updates.lastUpdated = new Date();
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)

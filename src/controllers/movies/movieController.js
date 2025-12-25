@@ -15,6 +15,7 @@ const convertMovieToCamelCase = (movie) => ({
   status: movie.status,
   score: movie.score,
   dateCompleted: movie.date_completed,
+  lastUpdated: book.last_updated,
   note: movie.note,
   imdbId: movie.imdb_id,
   userId: movie.user_id,
@@ -65,7 +66,7 @@ export const getMovies = async (req, res) => {
 					WHEN 'Dropped' THEN 3
 					ELSE 4
 				END,
-				date_created DESC
+				last_updated DESC
 		`,
       [userId]
     );
@@ -122,6 +123,7 @@ export const getMovie = async (req, res) => {
 
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
+  lastUpdated: "last_updated",
 };
 
 export const patchMovie = async (req, res) => {
@@ -129,6 +131,7 @@ export const patchMovie = async (req, res) => {
     const movieId = req.params.id;
     const userId = req.user.id;
     const updates = req.body;
+    updates.lastUpdated = new Date();
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)

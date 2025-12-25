@@ -14,6 +14,7 @@ const convertGameToCamelCase = (game) => ({
   status: game.status,
   score: game.score,
   dateCompleted: game.date_completed,
+  lastUpdated: book.last_updated,
   note: game.note,
   igdbId: game.igdb_id,
   userId: game.user_id,
@@ -64,7 +65,7 @@ export const getGames = async (req, res) => {
 					WHEN 'Dropped' THEN 3
 					ELSE 4
 				END,
-				date_created DESC
+				last_updated DESC
 		`,
       [userId]
     );
@@ -121,6 +122,7 @@ export const getGame = async (req, res) => {
 
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
+  lastUpdated: "last_updated",
 };
 
 export const patchGame = async (req, res) => {
@@ -128,6 +130,7 @@ export const patchGame = async (req, res) => {
     const gameId = req.params.id;
     const userId = req.user.id;
     const updates = req.body;
+    updates.lastUpdated = new Date();
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
