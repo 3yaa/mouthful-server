@@ -10,7 +10,7 @@ export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Get ALL needed fields from database
+    // get ALL needed fields from database
     const result = await pool.query(
       "SELECT id, username, email, password_hash FROM users WHERE email = $1",
       [email]
@@ -45,13 +45,16 @@ export const loginUser = async (req, res) => {
         .update(refreshToken)
         .digest("hex");
 
-      // save the refreshtoken to the user in db
-      const values = [hashedToken, expiresAt, email];
+      // get user agent and IP for tracking
+      const userAgent = req.headers["user-agent"] || null;
+      const ipAddress = req.ip || req.connection.remoteAddress || null;
+
+      // insert new session into user_sessions table
       await pool.query(
-        `UPDATE users 
-        SET refresh_token_hash = $1, refresh_token_expires = $2
-        WHERE email = $3`,
-        values
+        `INSERT INTO user_sessions 
+        (user_id, refresh_token_hash, refresh_token_expires, user_agent, ip_address)
+        VALUES ($1, $2, $3, $4, $5)`,
+        [foundUser.id, hashedToken, expiresAt, userAgent, ipAddress]
       );
 
       res.cookie("jwt", refreshToken, {

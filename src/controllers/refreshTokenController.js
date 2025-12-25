@@ -13,9 +13,12 @@ export const refreshToken = async (req, res) => {
       .update(refreshToken)
       .digest("hex");
 
-    // get user by hashed refresh token
+    // get session and user info
     const result = await pool.query(
-      "SELECT id, username, email, refresh_token_expires FROM users WHERE refresh_token_hash = $1",
+      `SELECT u.id, u.username, u.email, s.refresh_token_expires, s.id as session_id
+        FROM user_sessions s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.refresh_token_hash = $1`,
       [hashedToken]
     );
 
@@ -28,19 +31,24 @@ export const refreshToken = async (req, res) => {
     }
 
     const foundUser = result.rows[0];
-
     const dateNow = new Date();
+
     // IF REFRESH TOKEN HAS EXPIRED
     if (new Date(foundUser.refresh_token_expires) < dateNow) {
-      await pool.query(
-        "UPDATE users SET refresh_token_hash = NULL, refresh_token_expires = NULL WHERE id = $1",
-        [foundUser.id]
-      );
+      await pool.query("DELETE FROM user_sessions WHERE id = $1", [
+        foundUser.session_id,
+      ]);
       return res.status(403).json({
         success: false,
         message: "Refresh token expired",
       });
     }
+
+    // update last_active_at timestamp
+    await pool.query(
+      "UPDATE user_sessions SET last_active_at = NOW() WHERE id = $1",
+      [foundUser.session_id]
+    );
 
     // gen new access token
     const accessToken = jwt.sign(

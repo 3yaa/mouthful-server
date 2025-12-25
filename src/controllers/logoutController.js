@@ -15,20 +15,11 @@ export const logoutUser = async (req, res) => {
       .update(refreshToken)
       .digest("hex");
 
-    // Get user by hashed refresh token
-    const result = await pool.query(
-      "SELECT id, username, email, refresh_token_expires FROM users WHERE refresh_token_hash = $1",
+    // delete session token
+    await pool.query(
+      "DELETE FROM user_sessions WHERE refresh_token_hash = $1 RETURNING id",
       [hashedToken]
     );
-
-    // delete refresh token from db
-    if (result.rows.length > 0) {
-      const foundUser = result.rows[0];
-      await pool.query(
-        "UPDATE users SET refresh_token_hash = NULL, refresh_token_expires = NULL WHERE id = $1",
-        [foundUser.id]
-      );
-    }
 
     res.clearCookie("jwt", { httpOnly: true, sameSite: "none", secure: true });
     res.sendStatus(204);
