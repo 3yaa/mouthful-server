@@ -30,7 +30,7 @@ export const getRandomBooks = async (req, res) => {
       ORDER BY RANDOM()
       LIMIT 10
       `,
-      [userId]
+      [userId],
     );
 
     const convertedBooks = result.rows.map(convertBookToCamelCase);
@@ -52,7 +52,6 @@ export const getRandomBooks = async (req, res) => {
 export const getBooks = async (req, res) => {
   try {
     const userId = req.user.id;
-
     const result = await pool.query(
       `
       SELECT * FROM books 
@@ -64,9 +63,12 @@ export const getBooks = async (req, res) => {
           WHEN 'Dropped' THEN 3
           ELSE 4
         END,
-        last_updated DESC
-    `,
-      [userId]
+        CASE 
+          WHEN status = 'Completed' THEN date_completed
+          ELSE last_updated
+        END DESC
+      `,
+      [userId],
     );
 
     const convertedBooks = result.rows.map(convertBookToCamelCase);
@@ -92,7 +94,7 @@ export const getBook = async (req, res) => {
     const userId = req.user.id;
     const result = await pool.query(
       `SELECT * FROM books WHERE id=$1 AND user_id=$2`,
-      [bookId, userId]
+      [bookId, userId],
     );
 
     // if no book were found
@@ -258,7 +260,7 @@ export const deleteBook = async (req, res) => {
     // delete book
     const result = await pool.query(
       "DELETE FROM books WHERE id=$1 AND user_id=$2 RETURNING *",
-      [bookId, userId]
+      [bookId, userId],
     );
 
     if (result.rows.length === 0) {

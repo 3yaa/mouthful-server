@@ -65,7 +65,10 @@ export const getGames = async (req, res) => {
 					WHEN 'Dropped' THEN 3
 					ELSE 4
 				END,
-				last_updated DESC
+				CASE 
+          WHEN status = 'Completed' THEN date_completed
+          ELSE last_updated
+        END DESC
 		`,
       [userId]
     );

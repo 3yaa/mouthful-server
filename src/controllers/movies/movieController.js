@@ -32,7 +32,7 @@ export const getRandomMovies = async (req, res) => {
       ORDER BY RANDOM()
       LIMIT 10
       `,
-      [userId]
+      [userId],
     );
 
     const convertedMovies = result.rows.map(convertMovieToCamelCase);
@@ -66,9 +66,12 @@ export const getMovies = async (req, res) => {
 					WHEN 'Dropped' THEN 3
 					ELSE 4
 				END,
-				last_updated DESC
+				CASE 
+          WHEN status = 'Completed' THEN date_completed
+          ELSE last_updated
+        END DESC
 		`,
-      [userId]
+      [userId],
     );
 
     const convertedMovie = result.rows.map(convertMovieToCamelCase);
@@ -94,7 +97,7 @@ export const getMovie = async (req, res) => {
     const userId = req.user.id;
     const result = await pool.query(
       `SELECT * FROM movies WHERE id=$1 AND user_id=$2`,
-      [movieId, userId]
+      [movieId, userId],
     );
 
     // if no movie were found
@@ -264,7 +267,7 @@ export const deleteMovie = async (req, res) => {
     // delete movie
     const result = await pool.query(
       "DELETE FROM movies WHERE id=$1 AND user_id=$2 RETURNING *",
-      [movieId, userId]
+      [movieId, userId],
     );
 
     if (result.rows.length === 0) {
