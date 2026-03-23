@@ -36,7 +36,7 @@ app.use("/auth", authRouter);
 app.use(authenticateToken);
 
 // stat
-app.get("/api/stats", getStats);
+app.get("/stats", getStats);
 
 // media external api routers
 app.use("/shows-api", showsAPIRouter);
