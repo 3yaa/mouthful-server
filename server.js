@@ -16,6 +16,8 @@ import { booksRouter } from "./src/routes/books/booksRoute.js";
 import { moviesRouter } from "./src/routes/movies/moviesRoute.js";
 import { showsRouter } from "./src/routes/shows/showRoute.js";
 import { gamesRouter } from "./src/routes/games/gamesRoute.js";
+import { getStats } from "./src/controllers/getStats.js";
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -33,13 +35,17 @@ app.use("/auth", authRouter);
 // auth
 app.use(authenticateToken);
 
-// books api routers
+// stat
+app.get("/api/stats", getStats);
+
+// media external api routers
 app.use("/shows-api", showsAPIRouter);
 app.use("/movies-api", moviesAPIRouter);
 app.use("/books-api", booksAPIRouter);
 app.use("/games-api", gamesAPIRouter);
-app.use("/movies", moviesRouter);
+// media internal api routers
 app.use("/shows", showsRouter);
+app.use("/movies", moviesRouter);
 app.use("/books", booksRouter);
 app.use("/games", gamesRouter);
 
