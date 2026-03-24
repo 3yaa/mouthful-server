@@ -3,8 +3,12 @@ import { pool } from "../config/db.js";
 export const getStats = async (req, res) => {
   try {
     const userId = req.user.id;
+    const recentLimit = Math.min(
+      Math.max(parseInt(req.query.recentLimit) || 3, 0),
+      10,
+    );
 
-    const [result, avgResult] = await Promise.all([
+    const [result, avgResult, recentResult] = await Promise.all([
       // status stats
       pool.query(
         `
@@ -44,21 +48,21 @@ export const getStats = async (req, res) => {
         `
 				(SELECT 'movies' AS media, title, score, poster_url AS image_url, last_updated
 					FROM movies WHERE user_id=$1 AND status='Completed'
-					ORDER BY last_updated DESC LIMIT 3)
+					ORDER BY last_updated DESC LIMIT $2)
 				UNION ALL
 				(SELECT 'books', title, score, cover_url, last_updated
 					FROM books WHERE user_id=$1 AND status='Completed'
-					ORDER BY last_updated DESC LIMIT 3)
+					ORDER BY last_updated DESC LIMIT $2)
 				UNION ALL
 				(SELECT 'shows', title, score, poster_url, last_updated
 					FROM shows WHERE user_id=$1 AND status='Completed'
-					ORDER BY last_updated DESC LIMIT 3)
+					ORDER BY last_updated DESC LIMIT $2)
 				UNION ALL
 				(SELECT 'games', title, score, poster_url, last_updated
 					FROM games WHERE user_id=$1 AND status='Completed'
-					ORDER BY last_updated DESC LIMIT 3)
+					ORDER BY last_updated DESC LIMIT $2)
 				`,
-        [userId],
+        [userId, recentLimit],
       ),
     ]);
 
