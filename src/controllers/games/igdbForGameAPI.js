@@ -45,28 +45,24 @@ export async function useIgdbForGameAPI(req, res) {
         })),
       };
     });
-    // check for duplicate
+    // filter out duplicates
+    const nonDuplicateGames = [];
     for (const game of processedGames) {
       const isDuplicate = await checkDuplicate(
         "games",
         "igdb_id",
         game.igdbId,
-        userId
+        userId,
       );
-      if (isDuplicate) {
-        return res.status(409).json({
-          success: false,
-          title: game.title,
-          message: `Game "${game.title}" already in your library`,
-          error: "Duplicate found",
-        });
+      if (!isDuplicate) {
+        nonDuplicateGames.push(game);
       }
     }
     //
     res.status(200).json({
       success: true,
-      count: processedGames.length,
-      data: processedGames,
+      count: nonDuplicateGames.length,
+      data: nonDuplicateGames,
     });
   } catch (error) {
     console.error("IGDB fetch failed: ", error);

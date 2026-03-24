@@ -8,7 +8,7 @@ export async function useOpenLibraryAPI(req, res) {
     const userId = req.user.id;
     const { query, limit } = req.query;
     const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
-      query
+      query,
     )}&lang=en&fields=key,title,author_name,first_publish_year,subject,edition_key,cover_edition_key&limit=${limit}`;
     const headers = new Headers({
       "User-Agent": `Media Manager/0.3 (${process.env.PAGE_CONTACT})`,
@@ -38,28 +38,24 @@ export async function useOpenLibraryAPI(req, res) {
         return `https://covers.openlibrary.org/b/olid/${key}-L.jpg`;
       }),
     }));
-    // check for duplicate
+    // filter out duplicates
+    const nonDuplicateBooks = [];
     for (const book of processedBooks) {
       const isDuplicate = await checkDuplicate(
         "books",
         "key",
         book.key,
-        userId
+        userId,
       );
-      if (isDuplicate) {
-        return res.status(409).json({
-          success: false,
-          title: book.title,
-          message: `Book "${book.title}" already in your library`,
-          error: "Duplicate found",
-        });
+      if (!isDuplicate) {
+        nonDuplicateBooks.push(book);
       }
     }
     //
     res.status(200).json({
       success: true,
-      count: processedBooks.length,
-      data: processedBooks,
+      count: nonDuplicateBooks.length,
+      data: nonDuplicateBooks,
     });
   } catch (error) {
     console.error("OpenLibrary fetch failed: ", error);
