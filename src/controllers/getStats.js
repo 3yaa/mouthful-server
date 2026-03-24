@@ -5,6 +5,7 @@ export const getStats = async (req, res) => {
     const userId = req.user.id;
 
     const [result, avgResult] = await Promise.all([
+      // status stats
       pool.query(
         `
 			SELECT 'movies' AS media, status, COUNT(*) AS count 
@@ -21,6 +22,7 @@ export const getStats = async (req, res) => {
 			`,
         [userId],
       ),
+      // avg score
       pool.query(
         `
 				SELECT 'movies' AS media, ROUND(AVG(score), 1) AS avg_score
@@ -37,6 +39,27 @@ export const getStats = async (req, res) => {
 			`,
         [userId],
       ),
+      // most recent updated
+      pool.query(
+        `
+				(SELECT 'movies' AS media, title, score, poster_url AS image_url, last_updated
+					FROM movies WHERE user_id=$1 AND status='Completed'
+					ORDER BY last_updated DESC LIMIT 3)
+				UNION ALL
+				(SELECT 'books', title, score, cover_url, last_updated
+					FROM books WHERE user_id=$1 AND status='Completed'
+					ORDER BY last_updated DESC LIMIT 3)
+				UNION ALL
+				(SELECT 'shows', title, score, poster_url, last_updated
+					FROM shows WHERE user_id=$1 AND status='Completed'
+					ORDER BY last_updated DESC LIMIT 3)
+				UNION ALL
+				(SELECT 'games', title, score, poster_url, last_updated
+					FROM games WHERE user_id=$1 AND status='Completed'
+					ORDER BY last_updated DESC LIMIT 3)
+				`,
+        [userId],
+      ),
     ]);
 
     // num items
@@ -47,17 +70,28 @@ export const getStats = async (req, res) => {
       }
       stats[row.media][row.status] = Number(row.count);
     }
-
     // avg score
     for (const row of avgResult.rows) {
       if (stats[row.media]) {
         stats[row.media].avgScore = Number(row.avg_score);
       }
     }
+    //
+    const recent = {};
+    for (const row of recentResult.rows) {
+      recent[row.media] ??= [];
+      recent[row.media].push({
+        title: row.title,
+        score: row.score,
+        imageUrl: row.image_url,
+        lastUpdated: row.last_updated,
+      });
+    }
 
     res.json({
       success: true,
       data: stats,
+      recent: recent,
     });
   } catch (error) {
     console.error("Error fetching stats: ", error);
