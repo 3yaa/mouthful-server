@@ -87,6 +87,7 @@ export const getStats = async (req, res) => {
       recent[row.media].push({
         title: row.title,
         score: row.score,
+        status: row.status,
         imageUrl: row.image_url,
         lastUpdated: row.last_updated,
       });
