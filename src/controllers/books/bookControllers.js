@@ -197,6 +197,18 @@ export const createBook = async (req, res) => {
       key,
     } = req.body;
 
+    if (key) {
+      const isDuplicate = await checkDuplicate("books", "key", key, userId);
+      if (isDuplicate) {
+        return res.status(409).json({
+          success: false,
+          title: title,
+          message: `Book "${title}" already in your library`,
+          error: "Duplicate found",
+        });
+      }
+    }
+
     const query = `
     INSERT INTO books (
       title,
