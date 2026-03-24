@@ -1,4 +1,5 @@
 import { pool } from "../../config/db.js";
+import { checkDuplicate } from "../../utils/checkDuplicate.js";
 
 const convertBookToCamelCase = (book) => ({
   id: book.id,
