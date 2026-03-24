@@ -47,19 +47,19 @@ export const getStats = async (req, res) => {
       pool.query(
         `
 				(SELECT 'movies' AS media, title, score, poster_url AS image_url, last_updated
-					FROM movies WHERE user_id=$1 AND status='Completed'
+					FROM movies WHERE user_id=$1
 					ORDER BY last_updated DESC LIMIT $2)
 				UNION ALL
 				(SELECT 'books', title, score, cover_url, last_updated
-					FROM books WHERE user_id=$1 AND status='Completed'
+					FROM books WHERE user_id=$1
 					ORDER BY last_updated DESC LIMIT $2)
 				UNION ALL
 				(SELECT 'shows', title, score, poster_url, last_updated
-					FROM shows WHERE user_id=$1 AND status='Completed'
+					FROM shows WHERE user_id=$1
 					ORDER BY last_updated DESC LIMIT $2)
 				UNION ALL
 				(SELECT 'games', title, score, poster_url, last_updated
-					FROM games WHERE user_id=$1 AND status='Completed'
+					FROM games WHERE user_id=$1
 					ORDER BY last_updated DESC LIMIT $2)
 				`,
         [userId, recentLimit],
