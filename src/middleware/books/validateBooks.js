@@ -1,6 +1,4 @@
-const MAX_SCORE = 11;
 const MAX_NOTE_LENGTH = 1000;
-const MAX_COVER_EDITIONS = 15;
 const VALID_STATUSES = ["Want to Read", "Completed", "Dropped"];
 
 export const validateBookId = (req, res, next) => {
@@ -21,14 +19,24 @@ export const validateBookData = (req, res, next) => {
   const { score, note, dateCompleted, curCoverIndex } = req.body;
   // for score
   if (score !== undefined) {
-    const parsedScore = parseInt(score);
-    if (isNaN(parsedScore) || parsedScore < 0 || parsedScore > MAX_SCORE) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid score field provided (0-11, integer)",
-      });
+    if (score !== null) {
+      if (
+        typeof score !== "object" ||
+        typeof score.mu !== "number" ||
+        typeof score.phi !== "number" ||
+        !isFinite(score.mu) ||
+        !isFinite(score.phi) ||
+        score.mu < -5000 ||
+        score.mu > 5000 ||
+        score.phi < -5000 ||
+        score.phi > 5000
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid score field provided (must be { mu, phi } or null)",
+        });
+      }
     }
-    req.body.score = parsedScore;
   }
   // for notes
   if (note !== undefined) {
@@ -106,7 +114,7 @@ export const validateBookPatch = (req, res, next) => {
 
   // check if allowed
   const invalidFields = Object.keys(updates).filter(
-    (field) => !allowedFields.includes(field)
+    (field) => !allowedFields.includes(field),
   );
   if (invalidFields.length > 0) {
     return res.status(400).json({
@@ -119,7 +127,7 @@ export const validateBookPatch = (req, res, next) => {
 };
 
 export const validateBookCreate = (req, res, next) => {
-  const { title, coverEditions, datePublished, status, key } = req.body;
+  const { title, datePublished, status, key } = req.body;
   // REQUIRED FIELDS
   // title
   if (!title || title.trim() === "") {
