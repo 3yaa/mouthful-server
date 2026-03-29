@@ -12,7 +12,8 @@ const convertShowToCamelCase = (show) => ({
   curSeasonIndex: show.cur_season_index,
   curEpisode: show.cur_episode,
   status: show.status,
-  score: show.score,
+  score:
+    show.score_mu != null ? { mu: show.score_mu, phi: show.score_phi } : null,
   dateCompleted: show.date_completed,
   lastUpdated: show.last_updated,
   note: show.note,
@@ -135,8 +136,19 @@ export const patchShow = async (req, res) => {
   try {
     const showId = req.params.id;
     const userId = req.user.id;
-    const updates = req.body;
+    const updates = { ...req.body };
     updates.lastUpdated = new Date();
+
+    if (updates.score !== undefined) {
+      if (updates.score === null) {
+        updates.score_mu = null;
+        updates.score_phi = null;
+      } else {
+        updates.score_mu = updates.score.mu;
+        updates.score_phi = updates.score.phi;
+      }
+      delete updates.score;
+    }
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
@@ -195,32 +207,33 @@ export const createShow = async (req, res) => {
       curSeasonIndex,
       curEpisode,
       status,
-      score,
+      score: scoreObj,
       dateCompleted,
       note,
       tmdbId,
     } = req.body;
 
     const query = `
-		INSERT INTO shows (
-			title,
-			studio,
-			poster_url,
-			backdrop_url,
-			date_released,
-			seasons,
-			cur_season_index,
-			cur_episode,
-			status,
-			score,
-			date_completed,
-			note,
-			tmdb_id,
-			user_id
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-		) RETURNING *
-	`;
+    INSERT INTO shows (
+      title,
+      studio,
+      poster_url,
+      backdrop_url,
+      date_released,
+      seasons,
+      cur_season_index,
+      cur_episode,
+      status,
+      score_mu, 
+      score_phi, 
+      date_completed,
+      note,
+      tmdb_id,
+      user_id
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    ) RETURNING *
+  `;
     const values = [
       title,
       studio,
@@ -231,7 +244,8 @@ export const createShow = async (req, res) => {
       curSeasonIndex,
       curEpisode,
       status,
-      score,
+      scoreObj?.mu ?? null,
+      scoreObj?.phi ?? null,
       dateCompleted,
       note,
       tmdbId,

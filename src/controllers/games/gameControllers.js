@@ -12,7 +12,8 @@ const convertGameToCamelCase = (game) => ({
   dlcIndex: game.dlc_index,
   dlcs: game.dlcs,
   status: game.status,
-  score: game.score,
+  score:
+    game.score_mu != null ? { mu: game.score_mu, phi: game.score_phi } : null,
   dateCompleted: game.date_completed,
   lastUpdated: game.last_updated,
   note: game.note,
@@ -31,7 +32,7 @@ export const getRandomGames = async (req, res) => {
       ORDER BY RANDOM()
       LIMIT 10
       `,
-      [userId]
+      [userId],
     );
 
     const convertedGames = result.rows.map(convertGameToCamelCase);
@@ -70,7 +71,7 @@ export const getGames = async (req, res) => {
           ELSE last_updated
         END DESC
 		`,
-      [userId]
+      [userId],
     );
 
     const convertedGames = result.rows.map(convertGameToCamelCase);
@@ -96,7 +97,7 @@ export const getGame = async (req, res) => {
     const userId = req.user.id;
     const result = await pool.query(
       `SELECT * FROM games WHERE id=$1 AND user_id=$2`,
-      [gameId, userId]
+      [gameId, userId],
     );
 
     // if no game were found
@@ -132,8 +133,19 @@ export const patchGame = async (req, res) => {
   try {
     const gameId = req.params.id;
     const userId = req.user.id;
-    const updates = req.body;
+    const updates = { ...req.body };
     updates.lastUpdated = new Date();
+
+    if (updates.score !== undefined) {
+      if (updates.score === null) {
+        updates.score_mu = null;
+        updates.score_phi = null;
+      } else {
+        updates.score_mu = updates.score.mu;
+        updates.score_phi = updates.score.phi;
+      }
+      delete updates.score;
+    }
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
@@ -192,32 +204,33 @@ export const createGame = async (req, res) => {
       dlcIndex,
       dlcs,
       status,
-      score,
+      score: scoreObj,
       dateCompleted,
       note,
       igdbId,
     } = req.body;
 
     const query = `
-		INSERT INTO games (
-  		title,
-  		studio,
-  		poster_url,
-  		backdrop_url,
-  		date_released,
-  		main_title,
-  		dlc_index,
-  		dlcs,
-  		status,
-  		score,
-  		date_completed,
-  		note,
-  		igdb_id,
-  		user_id
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-		) RETURNING *
-	`;
+    INSERT INTO games (
+      title,
+      studio,
+      poster_url,
+      backdrop_url,
+      date_released,
+      main_title,
+      dlc_index,
+      dlcs,
+      status,
+      score_mu, 
+      score_phi, 
+      date_completed,
+      note,
+      igdb_id,
+      user_id
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    ) RETURNING *
+  `;
     const values = [
       title,
       studio,
@@ -228,7 +241,8 @@ export const createGame = async (req, res) => {
       dlcIndex,
       dlcs ? JSON.stringify(dlcs) : null,
       status,
-      score,
+      scoreObj?.mu ?? null,
+      scoreObj?.phi ?? null,
       dateCompleted,
       note,
       igdbId,
@@ -261,7 +275,7 @@ export const deleteGame = async (req, res) => {
     // delete game
     const result = await pool.query(
       "DELETE FROM games WHERE id=$1 AND user_id=$2 RETURNING *",
-      [gameId, userId]
+      [gameId, userId],
     );
 
     if (result.rows.length === 0) {

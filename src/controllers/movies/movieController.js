@@ -13,7 +13,10 @@ const convertMovieToCamelCase = (movie) => ({
   prequel: movie.prequel,
   sequel: movie.sequel,
   status: movie.status,
-  score: movie.score,
+  score:
+    movie.score_mu != null
+      ? { mu: movie.score_mu, phi: movie.score_phi }
+      : null,
   dateCompleted: movie.date_completed,
   lastUpdated: movie.last_updated,
   note: movie.note,
@@ -133,8 +136,19 @@ export const patchMovie = async (req, res) => {
   try {
     const movieId = req.params.id;
     const userId = req.user.id;
-    const updates = req.body;
+    const updates = { ...req.body };
     updates.lastUpdated = new Date();
+
+    if (updates.score !== undefined) {
+      if (updates.score === null) {
+        updates.score_mu = null;
+        updates.score_phi = null;
+      } else {
+        updates.score_mu = updates.score.mu;
+        updates.score_phi = updates.score.phi;
+      }
+      delete updates.score;
+    }
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
@@ -195,34 +209,34 @@ export const createMovie = async (req, res) => {
       prequel,
       sequel,
       status,
-      score,
+      score: scoreObj,
       dateCompleted,
       note,
       imdbId,
     } = req.body;
 
     const query = `
-		INSERT INTO movies (
-			date_created,
-			title,
-			director,  
-			poster_url,
-			backdrop_url,
-			date_released,
-			series_title,
-			place_in_series,
-			prequel,
-			sequel,
-			status,
-			score,
-			date_completed,
-			note,
-			imdb_id,
-			user_id
-		) VALUES (
-			CURRENT_TIMESTAMP, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
-		) RETURNING *
-	`;
+    INSERT INTO movies (
+      title, 
+      director,
+      poster_url, 
+      backdrop_url,
+      date_released, 
+      series_title, 
+      place_in_series, 
+      prequel, 
+      sequel,
+      status, 
+      score_mu, 
+      score_phi, 
+      date_completed, 
+      note, 
+      imdb_id, 
+      user_id
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+    ) RETURNING *
+  `;
     const values = [
       title,
       director,
@@ -234,7 +248,8 @@ export const createMovie = async (req, res) => {
       prequel,
       sequel,
       status,
-      score,
+      scoreObj?.mu ?? null,
+      scoreObj?.phi ?? null,
       dateCompleted,
       note,
       imdbId,
