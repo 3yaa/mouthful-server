@@ -89,6 +89,10 @@ export const validateMoviePatch = (req, res, next) => {
     "status",
     "note",
     "dateCompleted",
+    "seriesTitle",
+    "placeInSeries",
+    "prequel",
+    "sequel",
   ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
