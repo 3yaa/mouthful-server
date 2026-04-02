@@ -131,8 +131,12 @@ export const patchBook = async (req, res) => {
   try {
     const bookId = req.params.id;
     const userId = req.user.id;
-    const updates = { ...req.body };
-    updates.lastUpdated = new Date();
+    const { indirectUpdate, ...cleanUpdates } = req.body;
+    const updates = { ...cleanUpdates };
+
+    if (!indirectUpdate) {
+      updates.lastUpdated = new Date();
+    }
 
     if (updates.score !== undefined) {
       if (updates.score === null) {

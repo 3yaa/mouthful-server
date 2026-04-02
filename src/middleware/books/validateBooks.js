@@ -95,7 +95,13 @@ export const validateBookData = (req, res, next) => {
 //
 export const validateBookPatch = (req, res, next) => {
   const updates = req.body;
-  const allowedFields = ["score", "status", "note", "dateCompleted"];
+  const allowedFields = [
+    "indirectUpdate",
+    "score",
+    "status",
+    "note",
+    "dateCompleted",
+  ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
     return res.status(400).json({

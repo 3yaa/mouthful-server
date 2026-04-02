@@ -26,8 +26,10 @@ export const validateGameData = (req, res, next) => {
         typeof score.phi !== "number" ||
         !isFinite(score.mu) ||
         !isFinite(score.phi) ||
-        score.mu < -5000 || score.mu > 5000 ||
-        score.phi < -5000 || score.phi > 5000
+        score.mu < -5000 ||
+        score.mu > 5000 ||
+        score.phi < -5000 ||
+        score.phi > 5000
       ) {
         return res.status(400).json({
           success: false,
@@ -81,7 +83,13 @@ export const validateGameData = (req, res, next) => {
 //
 export const validateGamePatch = (req, res, next) => {
   const updates = req.body;
-  const allowedFields = ["score", "status", "note", "dateCompleted"];
+  const allowedFields = [
+    "indirectUpdate",
+    "score",
+    "status",
+    "note",
+    "dateCompleted",
+  ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
     return res.status(400).json({
@@ -99,7 +107,7 @@ export const validateGamePatch = (req, res, next) => {
   }
   // check if allowed
   const invalidFields = Object.keys(updates).filter(
-    (field) => !allowedFields.includes(field)
+    (field) => !allowedFields.includes(field),
   );
   if (invalidFields.length > 0) {
     return res.status(400).json({
