@@ -130,6 +130,8 @@ export const getMovie = async (req, res) => {
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
   lastUpdated: "last_updated",
+  seriesTitle: "series_title",
+  placeInSeries: "place_in_series",
 };
 
 export const patchMovie = async (req, res) => {

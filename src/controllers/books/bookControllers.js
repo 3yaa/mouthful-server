@@ -125,6 +125,8 @@ export const getBook = async (req, res) => {
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
   lastUpdated: "last_updated",
+  seriesTitle: "series_title",
+  placeInSeries: "place_in_series",
 };
 
 export const patchBook = async (req, res) => {
