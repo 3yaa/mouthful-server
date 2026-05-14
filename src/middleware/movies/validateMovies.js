@@ -1,4 +1,3 @@
-const MAX_SCORE = 11;
 const MAX_NOTE_LENGTH = 1000;
 const VALID_STATUSES = ["Want to Watch", "Completed", "Dropped"];
 
@@ -20,14 +19,24 @@ export const validateMovieData = (req, res, next) => {
   const { score, note, dateCompleted } = req.body;
   // for score
   if (score !== undefined) {
-    const parsedScore = parseInt(score);
-    if (isNaN(parsedScore) || parsedScore < 0 || parsedScore > MAX_SCORE) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid score field provided (0-11, integer)",
-      });
+    if (score !== null) {
+      if (
+        typeof score !== "object" ||
+        typeof score.mu !== "number" ||
+        typeof score.phi !== "number" ||
+        !isFinite(score.mu) ||
+        !isFinite(score.phi) ||
+        score.mu < -5000 ||
+        score.mu > 5000 ||
+        score.phi < -5000 ||
+        score.phi > 5000
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid score field provided (must be { mu, phi } or null)",
+        });
+      }
     }
-    req.body.score = parsedScore;
   }
   // for notes
   if (note !== undefined) {
@@ -74,7 +83,17 @@ export const validateMovieData = (req, res, next) => {
 //
 export const validateMoviePatch = (req, res, next) => {
   const updates = req.body;
-  const allowedFields = ["score", "status", "note", "dateCompleted"];
+  const allowedFields = [
+    "indirectUpdate",
+    "score",
+    "status",
+    "note",
+    "dateCompleted",
+    "seriesTitle",
+    "placeInSeries",
+    "prequel",
+    "sequel",
+  ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
     return res.status(400).json({
@@ -93,7 +112,7 @@ export const validateMoviePatch = (req, res, next) => {
 
   // check if allowed
   const invalidFields = Object.keys(updates).filter(
-    (field) => !allowedFields.includes(field)
+    (field) => !allowedFields.includes(field),
   );
   if (invalidFields.length > 0) {
     return res.status(400).json({

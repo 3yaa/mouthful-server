@@ -29,39 +29,39 @@ export const getStats = async (req, res) => {
       // avg score
       pool.query(
         `
-				SELECT 'movies' AS media, ROUND(AVG(score), 1) AS avg_score
-					FROM movies WHERE user_id=$1 AND score IS NOT NULL
-				UNION ALL
-				SELECT 'books', ROUND(AVG(score), 1)
-					FROM books WHERE user_id=$1 AND score IS NOT NULL
-				UNION ALL
-				SELECT 'shows', ROUND(AVG(score), 1)
-					FROM shows WHERE user_id=$1 AND score IS NOT NULL
-				UNION ALL
-				SELECT 'games', ROUND(AVG(score), 1)
-					FROM games WHERE user_id=$1 AND score IS NOT NULL
-			`,
+      SELECT 'movies' AS media, ROUND(AVG(score_mu / 200.0)::numeric, 1) AS avg_score
+        FROM movies WHERE user_id=$1 AND score_mu IS NOT NULL
+      UNION ALL
+      SELECT 'books', ROUND(AVG(score_mu / 200.0)::numeric, 1)
+        FROM books WHERE user_id=$1 AND score_mu IS NOT NULL
+      UNION ALL
+      SELECT 'shows', ROUND(AVG(score_mu / 200.0)::numeric, 1)
+        FROM shows WHERE user_id=$1 AND score_mu IS NOT NULL
+      UNION ALL
+      SELECT 'games', ROUND(AVG(score_mu / 200.0)::numeric, 1)
+        FROM games WHERE user_id=$1 AND score_mu IS NOT NULL
+      `,
         [userId],
       ),
       // most recent updated
       pool.query(
         `
-				(SELECT 'movies' AS media, title, score, status, poster_url AS image_url, last_updated
-					FROM movies WHERE user_id=$1
-					ORDER BY last_updated DESC LIMIT $2)
-				UNION ALL
-				(SELECT 'books', title, score, status, cover_url, last_updated
-					FROM books WHERE user_id=$1
-					ORDER BY last_updated DESC LIMIT $2)
-				UNION ALL
-				(SELECT 'shows', title, score, status, poster_url, last_updated
-					FROM shows WHERE user_id=$1
-					ORDER BY last_updated DESC LIMIT $2)
-				UNION ALL
-				(SELECT 'games', title, score, status, poster_url, last_updated
-					FROM games WHERE user_id=$1
-					ORDER BY last_updated DESC LIMIT $2)
-				`,
+      (SELECT 'movies' AS media, title, score_mu, score_phi, status, poster_url AS image_url, last_updated
+        FROM movies WHERE user_id=$1
+        ORDER BY last_updated DESC LIMIT $2)
+      UNION ALL
+      (SELECT 'books', title, score_mu, score_phi, status, cover_url, last_updated
+        FROM books WHERE user_id=$1
+        ORDER BY last_updated DESC LIMIT $2)
+      UNION ALL
+      (SELECT 'shows', title, score_mu, score_phi, status, poster_url, last_updated
+        FROM shows WHERE user_id=$1
+        ORDER BY last_updated DESC LIMIT $2)
+      UNION ALL
+      (SELECT 'games', title, score_mu, score_phi, status, poster_url, last_updated
+        FROM games WHERE user_id=$1
+        ORDER BY last_updated DESC LIMIT $2)
+      `,
         [userId, recentLimit],
       ),
     ]);
@@ -86,7 +86,10 @@ export const getStats = async (req, res) => {
       recent[row.media] ??= [];
       recent[row.media].push({
         title: row.title,
-        score: row.score,
+        score:
+          row.score_mu != null
+            ? { mu: row.score_mu, phi: row.score_phi }
+            : null,
         status: row.status,
         imageUrl: row.image_url,
         lastUpdated: row.last_updated,

@@ -11,7 +11,8 @@ const convertBookToCamelCase = (book) => ({
   prequel: book.prequel,
   sequel: book.sequel,
   status: book.status,
-  score: book.score,
+  score:
+    book.score_mu != null ? { mu: book.score_mu, phi: book.score_phi } : null,
   dateCompleted: book.date_completed,
   note: book.note,
   dateCreated: book.date_created,
@@ -124,14 +125,31 @@ export const getBook = async (req, res) => {
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
   lastUpdated: "last_updated",
+  seriesTitle: "series_title",
+  placeInSeries: "place_in_series",
 };
 
 export const patchBook = async (req, res) => {
   try {
     const bookId = req.params.id;
     const userId = req.user.id;
-    const updates = req.body;
-    updates.lastUpdated = new Date();
+    const { indirectUpdate, ...cleanUpdates } = req.body;
+    const updates = { ...cleanUpdates };
+
+    if (!indirectUpdate) {
+      updates.lastUpdated = new Date();
+    }
+
+    if (updates.score !== undefined) {
+      if (updates.score === null) {
+        updates.score_mu = null;
+        updates.score_phi = null;
+      } else {
+        updates.score_mu = updates.score.mu;
+        updates.score_phi = updates.score.phi;
+      }
+      delete updates.score;
+    }
 
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
@@ -191,7 +209,7 @@ export const createBook = async (req, res) => {
       prequel,
       sequel,
       status,
-      score,
+      score: scoreObj,
       dateCompleted,
       note,
       key,
@@ -208,13 +226,14 @@ export const createBook = async (req, res) => {
       prequel,
       sequel,
       status,
-      score,
+      score_mu, 
+      score_phi, 
       date_completed,
       note,
       key,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
     ) RETURNING *
 	`;
     const values = [
@@ -227,7 +246,8 @@ export const createBook = async (req, res) => {
       prequel,
       sequel,
       status,
-      score,
+      scoreObj?.mu ?? null,
+      scoreObj?.phi ?? null,
       dateCompleted,
       note,
       key,
