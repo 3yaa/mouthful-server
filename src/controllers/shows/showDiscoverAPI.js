@@ -94,9 +94,7 @@ export async function useTmdbTvDiscoverAPI(req, res) {
       };
     });
 
-    res
-      .status(200)
-      .json({ success: true, data: { shows: assembled, totalPages } });
+    res.status(200).json({ success: true, shows: assembled, totalPages });
   } catch (error) {
     console.error("TMDB-TV discover fetch failed: ", error);
     res.status(500).json({
