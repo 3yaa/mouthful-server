@@ -28,7 +28,7 @@ export const validateTMDBIdAPI = (req, res, next) => {
 };
 
 export const validateShowsDiscoverAPI = (req, res, next) => {
-  const { year, month, countryOrigin, page, isFuture } = req.query;
+  const { year, month, countryOrigin, page } = req.query;
 
   if (!year || !month || !page) {
     return res.status(400).json({
@@ -37,10 +37,17 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
     });
   }
 
-  req.query.year = parseInt(year);
-  req.query.month = parseInt(month);
+  const y = parseInt(year);
+  const m = parseInt(month);
+  const now = new Date();
+  const isFuture =
+    y > now.getFullYear() ||
+    (y === now.getFullYear() && m > now.getMonth() + 1);
+
+  req.query.year = y;
+  req.query.month = m;
   req.query.page = parseInt(page);
-  req.query.isFuture = isFuture === "true";
+  req.query.isFuture = isFuture;
 
   next();
 };
