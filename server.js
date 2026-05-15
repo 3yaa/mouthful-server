@@ -19,7 +19,8 @@ import { gamesRouter } from "./src/routes/games/gamesRoute.js";
 import { getStats } from "./src/controllers/getStats.js";
 import {
   useTmdbActorWorksAPI,
-  useTmdbCastAPI,
+  useTmdbShowCastAPI,
+  useTmdbMovieCastAPI,
 } from "./src/controllers/TmdbActor/actorInfoAPI.js";
 import {
   validateTmdbActorWorksAPI,
@@ -47,7 +48,8 @@ app.use(authenticateToken);
 app.get("/stats", getStats);
 
 // shared across movie/show
-app.get("/cast", validateTmdbCastAPI, useTmdbCastAPI);
+app.get("/show-cast", validateTmdbCastAPI, useTmdbShowCastAPI);
+app.get("/movie-cast", validateTmdbCastAPI, useTmdbMovieCastAPI);
 app.get("/actor-works", validateTmdbActorWorksAPI, useTmdbActorWorksAPI);
 
 // media external api routers

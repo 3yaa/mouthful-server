@@ -28,6 +28,7 @@ export async function useTmdbAPI(req, res) {
     // data clean up
     const movie = movies[0];
     const processedMovie = {
+      tmdb_id: String(movie.id),
       poster_url: movie.poster_path
         ? `https://image.tmdb.org/t/p/w1280${movie.poster_path}`
         : null,

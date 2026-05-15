@@ -2,7 +2,9 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-export async function useTmdbCastAPI(req, res) {
+const PROFILE_BASE = "https://image.tmdb.org/t/p/w342";
+
+export async function useTmdbShowCastAPI(req, res) {
   try {
     const { tmdbId } = req.query;
     const tmdbRes = await fetch(
@@ -14,7 +16,7 @@ export async function useTmdbCastAPI(req, res) {
       id: m.id,
       name: m.name,
       character: m.character,
-      profile_path: m.profile_path ?? null,
+      profile_path: m.profile_path ? `${PROFILE_BASE}${m.profile_path}` : null,
     }));
     res.status(200).json({ success: true, cast });
   } catch (e) {
@@ -24,6 +26,33 @@ export async function useTmdbCastAPI(req, res) {
       message: "Failed to fetch cast from TMDB",
       error: e.message,
     });
+  }
+}
+
+export async function useTmdbMovieCastAPI(req, res) {
+  try {
+    const { tmdbId } = req.query;
+    const tmdbRes = await fetch(
+      `https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${process.env.TMDB_API_KEY}`,
+    );
+    if (!tmdbRes.ok) throw new Error(`TMDB HTTP ${tmdbRes.status}`);
+    const data = await tmdbRes.json();
+    const cast = data.cast.slice(0, 12).map((m) => ({
+      id: m.id,
+      name: m.name,
+      character: m.character,
+      profile_path: m.profile_path ? `${PROFILE_BASE}${m.profile_path}` : null,
+    }));
+    res.status(200).json({ success: true, cast });
+  } catch (e) {
+    console.error("Failed to fetch movie cast from TMDB: ", e);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Failed to fetch movie cast from TMDB",
+        error: e.message,
+      });
   }
 }
 
@@ -50,7 +79,9 @@ export async function useTmdbActorWorksAPI(req, res) {
       .map((w) => ({
         id: w.id,
         title: w.title ?? w.name ?? "Unknown",
-        poster_path: w.poster_path ?? null,
+        poster_path: w.poster_path
+          ? `https://image.tmdb.org/t/p/w500${w.poster_path}`
+          : null,
         media_type: w.media_type,
         popularity: w.popularity,
         date: w.release_date ?? w.first_air_date ?? "",
