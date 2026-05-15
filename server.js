@@ -17,6 +17,14 @@ import { moviesRouter } from "./src/routes/movies/moviesRoute.js";
 import { showsRouter } from "./src/routes/shows/showRoute.js";
 import { gamesRouter } from "./src/routes/games/gamesRoute.js";
 import { getStats } from "./src/controllers/getStats.js";
+import {
+  useTmdbActorWorksAPI,
+  useTmdbCastAPI,
+} from "./src/controllers/TmdbActor/actorInfoAPI.js";
+import {
+  validateTmdbActorWorksAPI,
+  validateTmdbCastAPI,
+} from "./src/middleware/validateActorInfo.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,6 +45,10 @@ app.use(authenticateToken);
 
 // stat
 app.get("/stats", getStats);
+
+// shared across movie/show
+app.get("/cast", validateTmdbCastAPI, useTmdbCastAPI);
+app.get("/actor-works", validateTmdbActorWorksAPI, useTmdbActorWorksAPI);
 
 // media external api routers
 app.use("/shows-api", showsAPIRouter);
