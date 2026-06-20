@@ -19,6 +19,6 @@ showsAPIRouter.get(
 	validateShowsDiscoverAPI,
 	useTmdbTvDiscoverAPI,
 );
-showsAPIRouter.get("/omdb-score", validateShowRatingAPI, useOmdbEpisodeRatings);
+showsAPIRouter.get("/episodes-score", validateShowRatingAPI, useOmdbEpisodeRatings);
 
 export { showsAPIRouter };

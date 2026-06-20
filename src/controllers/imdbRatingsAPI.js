@@ -36,9 +36,11 @@ async function loadRatings() {
 
 		const map = new Map();
 		const lines = decompressed.toString("utf-8").split("\n");
+		const yield_ = () => new Promise((r) => setImmediate(r));
 		for (let i = 1; i < lines.length; i++) {
 			const [tconst, avg, votes] = lines[i].split("\t");
 			if (tconst) map.set(tconst, { rating: parseFloat(avg), votes: parseInt(votes) });
+			if (i % 100_000 === 0) await yield_();
 		}
 
 		memCache = { data: map, ts: Date.now() };
