@@ -1,4 +1,4 @@
-import { fetchOmdbEpisodeIds } from "./omdbEpisodeIdAPI.js";
+import { getShowEpisodes } from "../imdbEpisodeCache.js";
 import { getImdbRatings } from "../imdbRatingsAPI.js";
 import { pool } from "../../config/db.js";
 import dotenv from "dotenv";
@@ -17,10 +17,7 @@ async function resolveImdbId(imdbId, tmdbId, showId) {
 	if (!fetched) throw new Error("No IMDB ID found for this show");
 
 	if (showId) {
-		await pool.query("UPDATE shows SET imdb_id=$1 WHERE id=$2", [
-			fetched,
-			showId,
-		]);
+		await pool.query("UPDATE shows SET imdb_id=$1 WHERE id=$2", [fetched, showId]);
 	}
 
 	return fetched;
@@ -28,32 +25,40 @@ async function resolveImdbId(imdbId, tmdbId, showId) {
 
 export async function useOmdbEpisodeRatings(req, res) {
 	try {
-		const { imdbId, tmdbId, showId, totalSeason } = req.query;
+		const { imdbId, tmdbId, showId } = req.query;
 
 		const resolvedImdbId = await resolveImdbId(imdbId, tmdbId, showId);
 
-		const { episodes, failures } = await fetchOmdbEpisodeIds(
-			resolvedImdbId,
-			totalSeason,
-		);
+		const [episodes, ratings] = await Promise.all([
+			getShowEpisodes(resolvedImdbId),
+			getImdbRatings([resolvedImdbId]),
+		]);
 
-		const imdbIds = episodes.map((ep) => ep.imdbId);
-		const ratings = await getImdbRatings(imdbIds);
+		if (episodes.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "No episodes found for this show in IMDB dataset",
+			});
+		}
+
+		const episodeTconsts = episodes.map((ep) => ep.tconst);
+		const episodeRatings = await getImdbRatings(episodeTconsts);
 
 		const data = episodes.map((ep) => ({
 			season: ep.season,
-			episode: ep.episodeNum,
-			score: ratings[ep.imdbId]?.rating ?? null,
+			episode: ep.episode,
+			score: episodeRatings[ep.tconst]?.rating ?? null,
 		}));
 
-		res.status(failures.length === 0 ? 200 : 207).json({
-			success: failures.length === 0,
+		const seriesEntry = ratings[resolvedImdbId];
+
+		res.status(200).json({
+			success: true,
+			series: {
+				rating: seriesEntry?.rating ?? null,
+				votes: seriesEntry?.votes ?? null,
+			},
 			data,
-			failures: failures.map((f) => ({
-				season: f.season,
-				status: f.status,
-				message: f.message,
-			})),
 		});
 	} catch (error) {
 		console.error("Episode ratings fetch failed:", error);

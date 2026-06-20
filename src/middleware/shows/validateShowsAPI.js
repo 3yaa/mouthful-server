@@ -53,7 +53,7 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
 };
 
 export const validateShowRatingAPI = (req, res, next) => {
-	const { imdbId, tmdbId, totalSeason } = req.query;
+	const { imdbId, tmdbId } = req.query;
 
 	if (!imdbId && !tmdbId) {
 		return res.status(400).json({
@@ -61,16 +61,6 @@ export const validateShowRatingAPI = (req, res, next) => {
 			message: "imdbId or tmdbId required",
 		});
 	}
-
-	const season = Number(totalSeason);
-	if (!Number.isInteger(season) || season < 1) {
-		return res.status(400).json({
-			success: false,
-			message: "total season needs to be an integer > 0",
-		});
-	}
-
-	req.query.totalSeason = season;
 
 	next();
 };
