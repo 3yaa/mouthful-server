@@ -18,6 +18,7 @@ const convertShowToCamelCase = (show) => ({
   lastUpdated: show.last_updated,
   note: show.note,
   tmdbId: show.tmdb_id,
+  imdbId: show.imdb_id,
   userId: show.user_id,
 });
 
@@ -130,6 +131,7 @@ const camelToSnakeMapping = {
   curEpisode: "cur_episode",
   dateCompleted: "date_completed",
   lastUpdated: "last_updated",
+  imdbId: "imdb_id",
 };
 
 export const patchShow = async (req, res) => {
@@ -215,6 +217,7 @@ export const createShow = async (req, res) => {
       dateCompleted,
       note,
       tmdbId,
+      imdbId,
     } = req.body;
 
     const query = `
@@ -228,14 +231,15 @@ export const createShow = async (req, res) => {
       cur_season_index,
       cur_episode,
       status,
-      score_mu, 
-      score_phi, 
+      score_mu,
+      score_phi,
       date_completed,
       note,
       tmdb_id,
+      imdb_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
     ) RETURNING *
   `;
     const values = [
@@ -253,6 +257,7 @@ export const createShow = async (req, res) => {
       dateCompleted,
       note,
       tmdbId,
+      imdbId ?? null,
       userId,
     ];
     const result = await pool.query(query, values);

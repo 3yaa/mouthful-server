@@ -5,7 +5,7 @@ dotenv.config();
 export async function useTmdbTvAPI(req, res) {
   try {
     const tmdbId = req.query.tmdbId;
-    const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`;
+    const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids`;
     // make call
     const response = await fetch(url);
     if (!response.ok) {
@@ -39,6 +39,7 @@ export async function useTmdbTvAPI(req, res) {
       //   name: created_by.name,
       // })),
       studio: show.production_companies[0].name,
+      imdbId: show.external_ids?.imdb_id ?? null,
     };
     //
     res.status(200).json({

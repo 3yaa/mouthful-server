@@ -53,12 +53,12 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
 };
 
 export const validateShowRatingAPI = (req, res, next) => {
-	const { imdbId, totalSeason } = req.query;
+	const { imdbId, tmdbId, totalSeason } = req.query;
 
-	if (!imdbId) {
+	if (!imdbId && !tmdbId) {
 		return res.status(400).json({
 			success: false,
-			message: "imdb id required",
+			message: "imdbId or tmdbId required",
 		});
 	}
 
