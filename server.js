@@ -17,6 +17,8 @@ import { moviesRouter } from "./src/routes/movies/moviesRoute.js";
 import { showsRouter } from "./src/routes/shows/showRoute.js";
 import { gamesRouter } from "./src/routes/games/gamesRoute.js";
 import { getStats } from "./src/controllers/getStats.js";
+import { getImdbRatings } from "./src/controllers/imdbRatingsAPI.js";
+import { getShowEpisodes } from "./src/controllers/imdbEpisodeCache.js";
 import {
   useTmdbActorWorksAPI,
   useTmdbShowCastAPI,
@@ -65,6 +67,14 @@ app.use("/games", gamesRouter);
 
 app.listen(PORT, () => {
   console.log(`server running on PORT: ${PORT}`);
+  Promise.all([
+    getImdbRatings([]),
+    getShowEpisodes("__warmup__"),
+  ]).then(() => {
+    console.log("IMDB datasets loaded");
+  }).catch((err) => {
+    console.error("IMDB dataset pre-warm failed:", err.message);
+  });
 });
 
 // render health check endpoint
