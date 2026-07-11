@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { getImdbRatings } from "../imdbRatingsAPI.js";
+import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
 

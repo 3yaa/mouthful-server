@@ -1,5 +1,5 @@
-import { getShowEpisodes } from "../imdbEpisodeCache.js";
-import { getImdbRatings } from "../imdbRatingsAPI.js";
+import { getShowEpisodes } from "../imdbRating/imdbEpRatingCache.js";
+import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 import { pool } from "../../config/db.js";
 import dotenv from "dotenv";
 

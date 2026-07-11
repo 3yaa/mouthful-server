@@ -17,17 +17,18 @@ import { moviesRouter } from "./src/routes/movies/moviesRoute.js";
 import { showsRouter } from "./src/routes/shows/showRoute.js";
 import { gamesRouter } from "./src/routes/games/gamesRoute.js";
 import { getStats } from "./src/controllers/getStats.js";
-import { getImdbRatings } from "./src/controllers/imdbRatingsAPI.js";
-import { getShowEpisodes } from "./src/controllers/imdbEpisodeCache.js";
+import { getImdbRatings } from "./src/controllers/imdbRating/imdbRatingCache.js";
+import { getShowEpisodes } from "./src/controllers/imdbRating/imdbEpRatingCache.js";
 import {
-  useTmdbActorWorksAPI,
-  useTmdbShowCastAPI,
-  useTmdbMovieCastAPI,
+	useTmdbActorWorksAPI,
+	useTmdbShowCastAPI,
+	useTmdbMovieCastAPI,
 } from "./src/controllers/TmdbActor/actorInfoAPI.js";
 import {
-  validateTmdbActorWorksAPI,
-  validateTmdbCastAPI,
+	validateTmdbActorWorksAPI,
+	validateTmdbCastAPI,
 } from "./src/middleware/validateActorInfo.js";
+import { scheduleNext } from "./src/controllers/imdbRating/imdbScheduler.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,8 @@ app.use(cors(corsOptions));
 app.use(express.json());
 // built in: cookies middleware
 app.use(cookieParser());
+// cache imdb score
+scheduleNext();
 
 // auth router
 app.use("/auth", authRouter);
@@ -66,15 +69,14 @@ app.use("/books", booksRouter);
 app.use("/games", gamesRouter);
 
 app.listen(PORT, () => {
-  console.log(`server running on PORT: ${PORT}`);
-  Promise.all([
-    getImdbRatings([]),
-    getShowEpisodes("__warmup__"),
-  ]).then(() => {
-    console.log("IMDB datasets loaded");
-  }).catch((err) => {
-    console.error("IMDB dataset pre-warm failed:", err.message);
-  });
+	console.log(`server running on PORT: ${PORT}`);
+	Promise.all([getImdbRatings([]), getShowEpisodes("__warmup__")])
+		.then(() => {
+			console.log("IMDB datasets loaded");
+		})
+		.catch((err) => {
+			console.error("IMDB dataset pre-warm failed:", err.message);
+		});
 });
 
 // render health check endpoint

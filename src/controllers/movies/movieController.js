@@ -1,4 +1,5 @@
 import { pool } from "../../config/db.js";
+import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 const convertMovieToCamelCase = (movie) => ({
 	id: movie.id,
@@ -78,7 +79,17 @@ export const getMovies = async (req, res) => {
 			[userId],
 		);
 
-		const convertedMovie = result.rows.map(convertMovieToCamelCase);
+		// get the imdb score
+		const rows = result.rows;
+		const imdbIds = rows
+			.filter((m) => m.status === "Want to Watch" && m.imdb_id)
+			.map((m) => m.imdb_id);
+		const ratings = imdbIds.length ? await getImdbRatings(imdbIds) : {};
+
+		const convertedMovie = rows.map((m) => ({
+			...convertMovieToCamelCase(m),
+			imdbRating: ratings[m.imdb_id]?.rating ?? null,
+		}));
 
 		res.json({
 			success: true,
