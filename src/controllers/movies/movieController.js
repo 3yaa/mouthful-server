@@ -81,9 +81,7 @@ export const getMovies = async (req, res) => {
 
 		// get the imdb score
 		const rows = result.rows;
-		const imdbIds = rows
-			.filter((m) => m.status === "Want to Watch" && m.imdb_id)
-			.map((m) => m.imdb_id);
+		const imdbIds = rows.filter((m) => m.imdb_id).map((m) => m.imdb_id);
 		const ratings = imdbIds.length ? await getImdbRatings(imdbIds) : {};
 
 		const convertedMovie = rows.map((m) => ({
