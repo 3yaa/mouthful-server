@@ -13,7 +13,7 @@ function extractCoverUrls(results) {
 		.filter(Boolean);
 }
 
-// calls open lib -- cause itune puts ebook release date, and to get an ol key for all books
+// calls open lib -- cause itune puts ebook release date, also get ol key
 async function getOpenLibraryMatch(title, author) {
 	try {
 		const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&fields=key,title,first_publish_year&limit=1`;
@@ -84,7 +84,7 @@ export async function useAppleItunesAPI(req, res) {
 			? parseInt(matched.releaseDate.split("-")[0])
 			: undefined;
 		const olMatch = matched.artistName
-			? await getOpenLibraryMatch(matched.trackName, matched.artistName)
+			? await getOpenLibraryMatch(query, matched.artistName)
 			: null;
 
 		const processedBook = {
