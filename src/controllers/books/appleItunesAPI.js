@@ -1,7 +1,7 @@
-import dotenv from "dotenv";
+// import dotenv from "dotenv";
 import { checkDuplicate } from "../../utils/checkDuplicate.js";
 
-dotenv.config();
+// dotenv.config();
 
 function extractCoverUrls(results) {
 	return results
