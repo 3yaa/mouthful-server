@@ -232,7 +232,7 @@ export async function useHardcoverAPI(req, res) {
 		const isDuplicate = await checkDuplicate(
 			"books",
 			"key",
-			book.id,
+			String(book.id),
 			userId,
 		);
 		if (isDuplicate) {
