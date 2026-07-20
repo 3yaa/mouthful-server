@@ -34,7 +34,7 @@ export async function useOpenLibraryAPI(req, res) {
 				return `https://covers.openlibrary.org/b/olid/${key}-L.jpg`;
 			});
 			return {
-				key: `ol:${book.key.split("/").pop()}`,
+				key: `${book.key.split("/").pop()}`,
 				title: book.title,
 				author_name: book.author_name,
 				first_publish_year: book.first_publish_year,

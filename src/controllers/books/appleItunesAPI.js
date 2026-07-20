@@ -13,10 +13,10 @@ function extractCoverUrls(results) {
 		.filter(Boolean);
 }
 
-// calls open lib -- cause itune puts ebook release date
-async function getAccurateFirstPublishYear(title, author) {
+// calls open lib -- cause itune puts ebook release date, and to get an ol key for all books
+async function getOpenLibraryMatch(title, author) {
 	try {
-		const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&fields=title,first_publish_year&limit=1`;
+		const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&fields=key,title,first_publish_year&limit=1`;
 		const res = await fetch(url, {
 			headers: {
 				"User-Agent": `Media Manager/0.3 (${process.env.PAGE_CONTACT})`,
@@ -26,9 +26,12 @@ async function getAccurateFirstPublishYear(title, author) {
 		const doc = (await res.json()).docs?.[0];
 		if (!doc || doc.title?.toLowerCase() !== title.toLowerCase())
 			return null;
-		return doc.first_publish_year ?? null;
+		return {
+			key: doc.key ? `${doc.key.split("/").pop()}` : null,
+			first_publish_year: doc.first_publish_year ?? null,
+		};
 	} catch (e) {
-		console.error("Open Library first_publish_year lookup failed: ", e);
+		console.error("Open Library match lookup failed: ", e);
 		return null;
 	}
 }
@@ -80,18 +83,15 @@ export async function useAppleItunesAPI(req, res) {
 		const fallbackYear = matched.releaseDate
 			? parseInt(matched.releaseDate.split("-")[0])
 			: undefined;
-		const accurateYear = matched.artistName
-			? await getAccurateFirstPublishYear(
-					matched.trackName,
-					matched.artistName,
-				)
+		const olMatch = matched.artistName
+			? await getOpenLibraryMatch(matched.trackName, matched.artistName)
 			: null;
 
 		const processedBook = {
-			key: `apple:${matched.trackId}`,
+			key: olMatch?.key ?? `apple:${matched.trackId}`,
 			title: matched.trackName,
 			author_name: matched.artistName ? [matched.artistName] : [],
-			first_publish_year: accurateYear ?? fallbackYear,
+			first_publish_year: olMatch?.first_publish_year ?? fallbackYear,
 			cover_urls,
 			backdrop_urls,
 		};
