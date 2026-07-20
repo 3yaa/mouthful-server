@@ -148,7 +148,7 @@ async function withSeries(book) {
 	const series = (b.book_series ?? [])
 		.map((s) => ({
 			id: s.series?.id ?? null,
-			series_name: s.series?.name ?? null,
+			series_title: s.series?.name ?? null,
 			total: s.series?.primary_books_count ?? null,
 			position: s.position ?? null,
 			//
@@ -243,7 +243,7 @@ export async function useHardcoverAPI(req, res) {
 			});
 		}
 
-		// {subtitle, series_name, total, position/details, featured?}
+		// {subtitle, series_title, total, position/details, featured?}
 		const fullBook = await withSeries(book);
 		// {previous, next}
 		if (fullBook.series.length) {
@@ -256,7 +256,7 @@ export async function useHardcoverAPI(req, res) {
 		}
 
 		const processedBook = {
-			key: fullBook.id,
+			key: String(fullBook.id),
 			title: fullBook.title,
 			subtitle: fullBook.subtitle,
 			author_name: fullBook.authors,
@@ -265,17 +265,16 @@ export async function useHardcoverAPI(req, res) {
 			rating: fullBook.rating,
 			covers: fullBook.covers.map((c) => ({
 				url: c.url,
-				color: c.color ?? null,
+				color: c.color ?? "#000000",
 			})),
 			series: fullBook.series.map((s) => ({
-				series_name: s.series_name,
+				series_title: s.series_title,
 				total: s.total,
-				position: s.position,
-				previous_title: s.previous,
-				next_title: s.next,
+				position: s.position ? String(s.position) : null,
+				prequel: s.previous,
+				sequel: s.next,
 				//
 				details: s.details,
-				featured: s.featured,
 			})),
 		};
 		res.status(200).json({
