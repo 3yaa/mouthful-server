@@ -23,10 +23,10 @@ export const validateBooksAPI = (req, res, next) => {
     });
   }
 
-  if (limitNum > 100) {
+  if (limitNum > 20) {
     return res.status(400).json({
       success: false,
-      message: "limit cannot exceed 100",
+      message: "limit cannot exceed 20",
     });
   }
 
