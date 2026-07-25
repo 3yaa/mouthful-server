@@ -53,7 +53,7 @@ function cleanBookData(doc) {
 		rating: doc.rating ? Math.round(doc.rating * 200) / 100 : null,
 		// stripped before the record is returned
 		_compilation: !!doc.compilation,
-		_score: (doc.users_count ?? 0) * 10 + (doc.ratings_count ?? 0) * 5, // arbitrary score for ranking/filtering only
+		// _score: (doc.users_count ?? 0) * 10 + (doc.ratings_count ?? 0) * 5, // arbitrary score for ranking/filtering only
 	};
 }
 
@@ -78,7 +78,7 @@ async function searchBooks(title, { perPage = 5 } = {}) {
 					(book.authors.length > 0 || book.pages),
 			)
 			// text-match scores tie constantly; popularity breaks it toward the real record
-			.sort((a, z) => z._score - a._score)
+			// .sort((a, z) => z._score - a._score)
 	);
 }
 
@@ -126,7 +126,7 @@ async function withSeries(book) {
 	);
 	const b = data?.books?.[0] ?? {};
 
-	const { _compilation, _score, ...cleanBook } = book;
+	const { _compilation, ...cleanBook } = book;
 
 	// book covers -- every edition
 	const seen = new Set();
