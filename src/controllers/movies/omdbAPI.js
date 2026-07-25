@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { checkDuplicate } from "../../utils/checkDuplicate.js";
+import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
 
@@ -28,16 +29,19 @@ export async function useOmdbAPI(req, res) {
         error: "OMDb API error",
       });
     }
+    // get imdb rating
+    const imdbRatings = await getImdbRatings([movie.imdbID]);
+    const ratingEntry = imdbRatings[movie.imdbID];
+
     // data clean up
     const processedMovie = {
       imdbId: movie.imdbID,
       title: movie.Title,
       director: movie.Director,
       released_date: movie.Year,
+      imdbRating: ratingEntry?.rating ?? null,
       // lead_actors: movie.Actors,
       // awards: movie.Awards,
-      // imdbRating: movie.imdbRating,
-      // imdbVotes: movie.imdbVotes,
       // genre: movie.Genre,
     };
     // check for duplicate

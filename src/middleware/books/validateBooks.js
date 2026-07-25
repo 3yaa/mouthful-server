@@ -137,7 +137,8 @@ export const validateBookPatch = (req, res, next) => {
 };
 
 export const validateBookCreate = (req, res, next) => {
-  const { title, datePublished, status, key } = req.body;
+  const { title, datePublished, status, key, cover, numPages, rating } =
+    req.body;
   // REQUIRED FIELDS
   // title
   if (!title || title.trim() === "") {
@@ -181,6 +182,42 @@ export const validateBookCreate = (req, res, next) => {
       });
     }
     req.body.datePublished = parsedYear;
+  }
+  // cover
+  if (cover !== undefined && cover !== null) {
+    if (
+      typeof cover !== "object" ||
+      Array.isArray(cover) ||
+      typeof cover.url !== "string" ||
+      !cover.url ||
+      (cover.color !== undefined &&
+        cover.color !== null &&
+        typeof cover.color !== "string")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cover field provided (must be { url, color } or null)",
+      });
+    }
+  }
+  // numPages
+  if (numPages !== undefined && numPages !== null) {
+    if (!Number.isInteger(numPages) || numPages < 0 || numPages > 32767) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid numPages field provided (must be a non-negative integer)",
+      });
+    }
+  }
+  // rating
+  if (rating !== undefined && rating !== null) {
+    if (typeof rating !== "number" || !isFinite(rating) || rating < 0 || rating > 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid rating field provided (must be a number between 0 and 10)",
+      });
+    }
   }
 
   next();

@@ -4,7 +4,9 @@ const convertBookToCamelCase = (book) => ({
   id: book.id,
   title: book.title,
   author: book.author,
-  coverUrl: book.cover_url,
+  cover: book.cover ?? null,
+  numPages: book.num_pages,
+  rating: book.rating,
   datePublished: book.date_published,
   seriesTitle: book.series_title,
   placeInSeries: book.place_in_series,
@@ -12,7 +14,7 @@ const convertBookToCamelCase = (book) => ({
   sequel: book.sequel,
   status: book.status,
   score:
-    book.score_mu != null ? { mu: book.score_mu, phi: book.score_phi } : null,
+    book.score_mu ? { mu: book.score_mu, phi: book.score_phi } : null,
   dateCompleted: book.date_completed,
   note: book.note,
   dateCreated: book.date_created,
@@ -202,7 +204,7 @@ export const createBook = async (req, res) => {
     const {
       title,
       author,
-      coverUrl,
+      cover: coverObj,
       datePublished,
       seriesTitle,
       placeInSeries,
@@ -213,44 +215,50 @@ export const createBook = async (req, res) => {
       dateCompleted,
       note,
       key,
+      numPages,
+      rating,
     } = req.body;
 
     const query = `
     INSERT INTO books (
       title,
-      author,  
-      cover_url,
+      author,
+      cover,
       date_published,
       series_title,
       place_in_series,
       prequel,
       sequel,
       status,
-      score_mu, 
-      score_phi, 
+      score_mu,
+      score_phi,
       date_completed,
       note,
       key,
+      num_pages,
+      rating,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
     ) RETURNING *
 	`;
     const values = [
       title,
       author,
-      coverUrl,
+      coverObj,
       datePublished,
       seriesTitle,
       placeInSeries,
       prequel,
       sequel,
       status,
-      scoreObj?.mu ?? null,
-      scoreObj?.phi ?? null,
+      scoreObj?.mu,
+      scoreObj?.phi,
       dateCompleted,
       note,
       key,
+      numPages,
+      rating,
       userId,
     ];
     const result = await pool.query(query, values);
