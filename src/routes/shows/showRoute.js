@@ -12,6 +12,7 @@ import {
   validateShowData,
   validateShowPatch,
   validateShowCreate,
+  validateShowRefresh,
 } from "../../middleware/shows/validateShows.js";
 
 const showsRouter = express.Router();
@@ -25,6 +26,12 @@ showsRouter.patch(
   validateShowId,
   validateShowData,
   validateShowPatch,
+  patchShow
+);
+showsRouter.patch(
+  "/:id/refresh",
+  validateShowId,
+  validateShowRefresh,
   patchShow
 );
 showsRouter.delete("/:id", validateShowId, deleteShow);

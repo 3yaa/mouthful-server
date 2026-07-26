@@ -142,6 +142,10 @@ const camelToSnakeMapping = {
 	lastUpdated: "last_updated",
 	seriesTitle: "series_title",
 	placeInSeries: "place_in_series",
+	posterUrl: "poster_url",
+	backdropUrl: "backdrop_url",
+	dateReleased: "date_released",
+	tmdbId: "tmdb_id",
 };
 
 export const patchMovie = async (req, res) => {

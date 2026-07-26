@@ -40,6 +40,12 @@ export async function useTmdbTvAPI(req, res) {
       // })),
       studio: show.production_companies[0].name,
       imdbId: show.external_ids?.imdb_id ?? null,
+      poster_url: show.poster_path
+        ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+        : null,
+      backdrop_url: show.backdrop_path
+        ? `https://image.tmdb.org/t/p/w1280${show.backdrop_path}`
+        : null,
     };
     //
     res.status(200).json({

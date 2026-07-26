@@ -119,6 +119,37 @@ export const validateGamePatch = (req, res, next) => {
   next();
 };
 
+// metadata-only allowlist for the "reload from source" flow.
+// dlcIndex is preserved by the client, but dlcs (the list) is refreshed.
+export const validateGameRefresh = (req, res, next) => {
+  const updates = req.body;
+  const allowedFields = [
+    "indirectUpdate",
+    "posterUrl",
+    "backdropUrl",
+    "dlcs",
+  ];
+  // check if exists
+  if (!updates || Object.keys(updates).length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "No update field provided",
+    });
+  }
+  // check if allowed
+  const invalidFields = Object.keys(updates).filter(
+    (field) => !allowedFields.includes(field),
+  );
+  if (invalidFields.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid refresh field provided",
+    });
+  }
+
+  next();
+};
+
 export const validateGameCreate = (req, res, next) => {
   const { title, dateReleased, status, igdbId } = req.body;
   // REQUIRED FIELDS

@@ -4,11 +4,15 @@ import { useGoogleBooksAPI } from "../../controllers/books/googleBooksAPI.js";
 import { useWikidataAPI } from "../../controllers/books/wikidataAPI.js";
 import { validateBooksAPI } from "../../middleware/books/validateBooksAPI.js";
 import { useAppleItunesAPI } from "../../controllers/books/appleItunesAPI.js";
-import { useHardcoverAPI } from "../../controllers/books/hardcoverAPI.js";
+import {
+  useHardcoverAPI,
+  useHardcoverByKeyAPI,
+} from "../../controllers/books/hardcoverAPI.js";
 
 const booksAPIRouter = express.Router();
 
 booksAPIRouter.get("/hardcover", validateBooksAPI, useHardcoverAPI);
+booksAPIRouter.get("/hardcover-by-key", useHardcoverByKeyAPI);
 
 // depricated
 booksAPIRouter.get("/apple-itunes", useAppleItunesAPI);

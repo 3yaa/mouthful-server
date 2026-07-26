@@ -136,6 +136,40 @@ export const validateBookPatch = (req, res, next) => {
   next();
 };
 
+// metadata-only allowlist for the "reload from source" flow.
+export const validateBookRefresh = (req, res, next) => {
+  const updates = req.body;
+  const allowedFields = [
+    "indirectUpdate",
+    "cover",
+    "numPages",
+    "rating",
+    "seriesTitle",
+    "placeInSeries",
+    "prequel",
+    "sequel",
+  ];
+  // check if exists
+  if (!updates || Object.keys(updates).length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "No update field provided",
+    });
+  }
+  // check if allowed
+  const invalidFields = Object.keys(updates).filter(
+    (field) => !allowedFields.includes(field),
+  );
+  if (invalidFields.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid refresh field provided",
+    });
+  }
+
+  next();
+};
+
 export const validateBookCreate = (req, res, next) => {
   const { title, datePublished, status, key, cover, numPages, rating } =
     req.body;

@@ -12,6 +12,7 @@ import {
   validateMovieData,
   validateMoviePatch,
   validateMovieCreate,
+  validateMovieRefresh,
 } from "../../middleware/movies/validateMovies.js";
 
 const moviesRouter = express.Router();
@@ -25,6 +26,12 @@ moviesRouter.patch(
   validateMovieId,
   validateMovieData,
   validateMoviePatch,
+  patchMovie
+);
+moviesRouter.patch(
+  "/:id/refresh",
+  validateMovieId,
+  validateMovieRefresh,
   patchMovie
 );
 moviesRouter.delete("/:id", validateMovieId, deleteMovie);

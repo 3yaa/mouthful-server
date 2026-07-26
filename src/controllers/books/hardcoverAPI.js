@@ -68,18 +68,16 @@ async function searchBooks(title, { perPage = 5 } = {}) {
 		{ q: title, perPage },
 	);
 	const hits = data?.search?.results?.hits ?? [];
-	return (
-		hits
-			.map((hit) => cleanBookData(hit.document))
-			.filter(
-				(book) =>
-					book.title &&
-					!book._compilation &&
-					(book.authors.length > 0 || book.pages),
-			)
-			// text-match scores tie constantly; popularity breaks it toward the real record
-			// .sort((a, z) => z._score - a._score)
-	);
+	return hits
+		.map((hit) => cleanBookData(hit.document))
+		.filter(
+			(book) =>
+				book.title &&
+				!book._compilation &&
+				(book.authors.length > 0 || book.pages),
+		);
+	// text-match scores tie constantly; popularity breaks it toward the real record
+	// .sort((a, z) => z._score - a._score)
 }
 
 // 2nd call -- series
@@ -243,46 +241,100 @@ export async function useHardcoverAPI(req, res) {
 			});
 		}
 
-		// {subtitle, series_title, total, position/details, featured?}
-		const fullBook = await withSeries(book);
-		// {previous, next}
-		if (fullBook.series.length) {
-			const map = await allNeighbours(fullBook.series);
-			for (const s of fullBook.series) {
-				const n = map[s.id] ?? { previous: null, next: null };
-				s.previous = n.previous;
-				s.next = n.next;
-			}
-		}
-
-		const processedBook = {
-			key: String(fullBook.id),
-			title: fullBook.title,
-			subtitle: fullBook.subtitle,
-			author_name: fullBook.authors,
-			first_publish_year: fullBook.first_publish_year,
-			num_pages: fullBook.pages,
-			rating: fullBook.rating,
-			covers: fullBook.covers.map((c) => ({
-				url: c.url,
-				color: c.color ?? "#000000",
-			})),
-			series: fullBook.series.map((s) => ({
-				series_title: s.series_title,
-				total: s.total,
-				position: s.position ? String(s.position) : null,
-				prequel: s.previous,
-				sequel: s.next,
-				//
-				details: s.details,
-			})),
-		};
+		const processedBook = await assembleBook(book);
 		res.status(200).json({
 			success: true,
 			data: processedBook,
 		});
 	} catch (e) {
 		console.error("Hardcover fetch failed: ", e);
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch book from Hardcover",
+			error: e.message,
+		});
+	}
+}
+
+// direct lookup by hardcover book id -- used to reload an existing library
+async function bookById(id) {
+	const data = await gql(
+		`query BookById($id: Int!) {
+			books(where: { id: { _eq: $id } }, limit: 1) {
+				id
+				title
+				release_year
+				pages
+				rating
+				compilation
+				contributions { contribution author { name } }
+			}
+		}`,
+		{ id: Number(id) },
+	);
+	const doc = data?.books?.[0];
+	if (!doc) return null;
+	return cleanBookData(doc);
+}
+
+//  series/covers/neighbours enrichment
+async function assembleBook(book) {
+	// {subtitle, series_title, total, position/details, featured?}
+	const fullBook = await withSeries(book);
+	// {previous, next}
+	if (fullBook.series.length) {
+		const map = await allNeighbours(fullBook.series);
+		for (const s of fullBook.series) {
+			const n = map[s.id] ?? { previous: null, next: null };
+			s.previous = n.previous;
+			s.next = n.next;
+		}
+	}
+
+	return {
+		key: String(fullBook.id),
+		title: fullBook.title,
+		subtitle: fullBook.subtitle,
+		author_name: fullBook.authors,
+		first_publish_year: fullBook.first_publish_year,
+		num_pages: fullBook.pages,
+		rating: fullBook.rating,
+		covers: fullBook.covers.map((c) => ({
+			url: c.url,
+			color: c.color ?? "#000000",
+		})),
+		series: fullBook.series.map((s) => ({
+			series_title: s.series_title,
+			total: s.total,
+			position: s.position ? String(s.position) : null,
+			prequel: s.previous,
+			sequel: s.next,
+			//
+			details: s.details,
+		})),
+	};
+}
+
+// reload metadata for a book already in the library, keyed by hardcover id
+export async function useHardcoverByKeyAPI(req, res) {
+	try {
+		const key = req.query.key;
+
+		const book = await bookById(key);
+		if (!book) {
+			return res.status(404).json({
+				success: false,
+				message: "No book found in Hardcover",
+			});
+		}
+
+		const processedBook = await assembleBook(book);
+		res.status(200).json({
+			success: true,
+			data: processedBook,
+		});
+	} catch (e) {
+		console.error("Hardcover by-key fetch failed: ", e);
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch book from Hardcover",

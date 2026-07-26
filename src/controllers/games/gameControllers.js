@@ -127,6 +127,12 @@ export const getGame = async (req, res) => {
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
   lastUpdated: "last_updated",
+  posterUrl: "poster_url",
+  backdropUrl: "backdrop_url",
+  dateReleased: "date_released",
+  mainTitle: "main_title",
+  dlcIndex: "dlc_index",
+  igdbId: "igdb_id",
 };
 
 export const patchGame = async (req, res) => {

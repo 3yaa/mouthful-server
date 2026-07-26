@@ -12,6 +12,7 @@ import {
   validateGameData,
   validateGamePatch,
   validateGameCreate,
+  validateGameRefresh,
 } from "../../middleware/games/validateGames.js";
 
 const gamesRouter = express.Router();
@@ -25,6 +26,12 @@ gamesRouter.patch(
   validateGameId,
   validateGameData,
   validateGamePatch,
+  patchGame
+);
+gamesRouter.patch(
+  "/:id/refresh",
+  validateGameId,
+  validateGameRefresh,
   patchGame
 );
 gamesRouter.delete("/:id", validateGameId, deleteGame);
