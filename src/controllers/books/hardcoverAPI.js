@@ -51,14 +51,15 @@ function cleanBookData(doc) {
 		first_publish_year: doc.release_year ?? null,
 		pages: doc.pages ?? null,
 		rating: doc.rating ? Math.round(doc.rating * 200) / 100 : null,
-		// stripped before the record is returned
-		// _compilation: !!doc.compilation,
-		// _score: (doc.users_count ?? 0) * 10 + (doc.ratings_count ?? 0) * 5, // arbitrary score for ranking/filtering only
+		// thumbnail from the search doc (used by the multi-result picker)
+		cover_url: doc.image?.url ?? null,
+		// popularity, used only for ranking below then stripped before returning
+		_score: (doc.users_count ?? 0) * 10 + (doc.ratings_count ?? 0) * 5,
 	};
 }
 
 //
-async function searchBooks(title, { perPage = 5 } = {}) {
+async function searchBooks(title, { perPage = 10 } = {}) {
 	const data = await gql(
 		`query SearchBooks($q: String!, $perPage: Int!) {
 				search(query: $q, query_type: "Book", per_page: $perPage, page: 1) {
@@ -68,16 +69,15 @@ async function searchBooks(title, { perPage = 5 } = {}) {
 		{ q: title, perPage },
 	);
 	const hits = data?.search?.results?.hits ?? [];
-	return hits
-		.map((hit) => cleanBookData(hit.document))
-		.filter(
-			(book) =>
-				book.title &&
-				// !book._compilation &&
-				(book.authors.length > 0 || book.pages),
-		);
-	// text-match scores tie constantly; popularity breaks it toward the real record
-	// .sort((a, z) => z._score - a._score)
+	return (
+		hits
+			.map((hit) => cleanBookData(hit.document))
+			.filter(
+				(book) =>
+					book.title && (book.authors.length > 0 || book.pages),
+			)
+			.sort((a, z) => z._score - a._score)
+	);
 }
 
 // 2nd call -- series
@@ -251,6 +251,43 @@ export async function useHardcoverAPI(req, res) {
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch book from Hardcover",
+			error: e.message,
+		});
+	}
+}
+
+// returns the top candidates
+export async function useHardcoverMultiAPI(req, res) {
+	try {
+		const userId = req.user.id;
+		const title = req.query.title;
+
+		const results = await searchBooks(title);
+		const candidates = await Promise.all(
+			results.slice(0, 6).map(async (b) => ({
+				key: String(b.id),
+				title: b.title,
+				author_name: b.authors,
+				first_publish_year: b.first_publish_year,
+				cover_url: b.cover_url,
+				isDuplicate: await checkDuplicate(
+					"books",
+					"key",
+					String(b.id),
+					userId,
+				),
+			})),
+		);
+
+		res.status(200).json({
+			success: true,
+			data: candidates,
+		});
+	} catch (e) {
+		console.error("Hardcover multi fetch failed: ", e);
+		res.status(500).json({
+			success: false,
+			message: "Failed to search Hardcover",
 			error: e.message,
 		});
 	}

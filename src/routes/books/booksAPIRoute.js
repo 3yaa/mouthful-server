@@ -7,11 +7,13 @@ import { useAppleItunesAPI } from "../../controllers/books/appleItunesAPI.js";
 import {
   useHardcoverAPI,
   useHardcoverByKeyAPI,
+  useHardcoverMultiAPI,
 } from "../../controllers/books/hardcoverAPI.js";
 
 const booksAPIRouter = express.Router();
 
 booksAPIRouter.get("/hardcover", validateBooksAPI, useHardcoverAPI);
+booksAPIRouter.get("/hardcover-multi", validateBooksAPI, useHardcoverMultiAPI);
 booksAPIRouter.get("/hardcover-by-key", useHardcoverByKeyAPI);
 
 // depricated
