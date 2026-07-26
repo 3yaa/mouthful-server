@@ -50,7 +50,7 @@ export const getStats = async (req, res) => {
         FROM movies WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       UNION ALL
-      (SELECT 'books', title, score_mu, score_phi, status, cover_url, last_updated
+      (SELECT 'books', title, score_mu, score_phi, status, cover->>'url', last_updated
         FROM books WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       UNION ALL
