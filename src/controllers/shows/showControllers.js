@@ -160,6 +160,12 @@ export const patchShow = async (req, res) => {
       delete updates.score;
     }
 
+    // seasons is a jsonb column -- db array (make match)
+    if (updates.seasons !== undefined) {
+      updates.seasons =
+        updates.seasons === null ? null : JSON.stringify(updates.seasons);
+    }
+
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
       .map((key, index) => {

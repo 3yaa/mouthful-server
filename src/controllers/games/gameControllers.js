@@ -157,6 +157,11 @@ export const patchGame = async (req, res) => {
       delete updates.score;
     }
 
+    // dlcs is a jsonb column -- db is array 
+    if (updates.dlcs !== undefined) {
+      updates.dlcs = updates.dlcs === null ? null : JSON.stringify(updates.dlcs);
+    }
+
     // breaks all the keys into key=$i
     const setClause = Object.keys(updates)
       .map((key, index) => {

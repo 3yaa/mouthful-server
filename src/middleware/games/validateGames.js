@@ -120,7 +120,6 @@ export const validateGamePatch = (req, res, next) => {
 };
 
 // metadata-only allowlist for the "reload from source" flow.
-// dlcIndex is preserved by the client, but dlcs (the list) is refreshed.
 export const validateGameRefresh = (req, res, next) => {
   const updates = req.body;
   const allowedFields = [
@@ -128,6 +127,7 @@ export const validateGameRefresh = (req, res, next) => {
     "posterUrl",
     "backdropUrl",
     "dlcs",
+    "dlcIndex",
   ];
   // check if exists
   if (!updates || Object.keys(updates).length === 0) {
