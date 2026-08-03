@@ -197,7 +197,14 @@ export const patchMovie = async (req, res) => {
 			});
 		}
 
-		const convertedMovie = convertMovieToCamelCase(result.rows[0]);
+		const row = result.rows[0];
+		// rating
+		const ratings = row.imdb_id ? await getImdbRatings([row.imdb_id]) : {};
+
+		const convertedMovie = {
+			...convertMovieToCamelCase(row),
+			imdbRating: ratings[row.imdb_id]?.rating ?? null,
+		};
 
 		res.status(200).json({
 			success: true,
@@ -279,8 +286,14 @@ export const createMovie = async (req, res) => {
 			userId,
 		];
 		const result = await pool.query(query, values);
+		const row = result.rows[0];
+		// get the imdb score
+		const ratings = row.imdb_id ? await getImdbRatings([row.imdb_id]) : {};
 
-		const convertedMovie = convertMovieToCamelCase(result.rows[0]);
+		const convertedMovie = {
+			...convertMovieToCamelCase(row),
+			imdbRating: ratings[row.imdb_id]?.rating ?? null,
+		};
 
 		res.status(201).json({
 			success: true,
