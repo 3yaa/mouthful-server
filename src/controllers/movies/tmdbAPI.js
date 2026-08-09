@@ -89,7 +89,9 @@ async function resolveSeries(details, tmdbId) {
 export async function useMovieTmdbAPI(req, res) {
 	try {
 		const userId = req.user.id;
-		const { title, year } = req.query;
+		const { title, year, reload } = req.query;
+		// reloading a legacy row 
+		const isReload = reload === "1";
 
 		// first call
 		const match = await searchMovie(title, year);
@@ -103,7 +105,7 @@ export async function useMovieTmdbAPI(req, res) {
 		const tmdbId = String(match.id);
 
 		// check for dup
-		if (await checkDuplicate("movies", "tmdb_id", tmdbId, userId)) {
+		if (!isReload && (await checkDuplicate("movies", "tmdb_id", tmdbId, userId))) {
 			return res.status(409).json({
 				success: false,
 				title: match.title,
@@ -124,7 +126,7 @@ export async function useMovieTmdbAPI(req, res) {
 		}
 
 		// legacy some rows are missing tmdbId -- 2nd dup check
-		if (await checkDuplicate("movies", "imdb_id", imdbId, userId)) {
+		if (!isReload && (await checkDuplicate("movies", "imdb_id", imdbId, userId))) {
 			return res.status(409).json({
 				success: false,
 				title: match.title,

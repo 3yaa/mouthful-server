@@ -136,6 +136,10 @@ export const validateMovieRefresh = (req, res, next) => {
 		"placeInSeries",
 		"prequel",
 		"sequel",
+		// legacy have no tmdb id -- a full reload resolves and writes one
+		"tmdbId",
+		"director",
+		"dateReleased",
 	];
 	// check if exists
 	if (!updates || Object.keys(updates).length === 0) {
