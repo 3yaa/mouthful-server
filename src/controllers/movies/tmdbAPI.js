@@ -1,52 +1,198 @@
 import dotenv from "dotenv";
+import { checkDuplicate } from "../../utils/checkDuplicate.js";
+import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
 
-export async function useTmdbAPI(req, res) {
-  try {
-    const imdbId = req.query.imdbId;
-    const url = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${process.env.TMDB_API_KEY}&external_source=imdb_id`;
-    // make call
-    const response = await fetch(url);
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        message: `TMDB API error: ${response.statusText}`,
-        error: `TMDB API failure`,
-      });
-    }
-    // check if valid
-    const data = await response.json();
-    const movies = data.movie_results || [];
-    if (movies.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Movie not found in TMDB",
-        error: "No movie results",
-      });
-    }
-    // data clean up
-    const movie = movies[0];
-    const processedMovie = {
-      tmdb_id: String(movie.id),
-      poster_url: movie.poster_path
-        ? `https://image.tmdb.org/t/p/w1280${movie.poster_path}`
-        : null,
-      backdrop_url: movie.backdrop_path
-        ? `https://image.tmdb.org/t/p/w1280${movie.backdrop_path}`
-        : null,
-    };
-    //
-    res.status(200).json({
-      success: true,
-      data: processedMovie,
-    });
-  } catch (error) {
-    console.error("TMDB fetch failed: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch movie cover from TMDB",
-      error: error.message,
-    });
-  }
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const TMDB_IMG = "https://image.tmdb.org/t/p/w1280";
+
+async function tmdbFetch(path, params = {}) {
+	const query = new URLSearchParams({
+		api_key: process.env.TMDB_API_KEY,
+		...params,
+	});
+	const response = await fetch(`${TMDB_BASE}${path}?${query}`);
+	if (!response.ok) {
+		const error = new Error(`TMDB API error: ${response.statusText}`);
+		error.status = response.status;
+		throw error;
+	}
+	return response.json();
+}
+
+// --- 1st call -- title | tmdbId
+async function searchMovie(title, year) {
+	const data = await tmdbFetch(
+		"/search/movie",
+		year ? { query: title, year } : { query: title },
+	);
+	return data.results?.[0] ?? null;
+}
+
+// ---- 2nd call -- director | releae date | poster | backdrop | tmdbID | imdbID | check belongs_to_collection (decides if call 3 is needed)
+async function getMovieDetails(tmdbId) {
+	return tmdbFetch(`/movie/${tmdbId}`, {
+		append_to_response: "credits,external_ids",
+	});
+}
+
+// ----- 3rd call -- sequel | prequel | place in series | series title
+async function getCollection(collectionId) {
+	return tmdbFetch(`/collection/${collectionId}`);
+}
+
+const getDirector = (credits) =>
+	(credits?.crew ?? [])
+		.filter((member) => member.job === "Director")
+		.map((member) => member.name)
+		.join(", ") || null;
+
+const getPosterUrl = (path) => (path ? `${TMDB_IMG}${path}` : null);
+
+const getReleaseYear = (releaseDate) => {
+	const year = parseInt(releaseDate?.slice(0, 4));
+	return isNaN(year) ? null : year;
+};
+
+// a movie belongs to at most one tmdb collection, so this is one object or null
+async function resolveSeries(details, tmdbId) {
+	const collectionId = details.belongs_to_collection?.id;
+	if (!collectionId) return null;
+	// make 3rd call and get series info
+	try {
+		const collection = await getCollection(collectionId);
+		//sort
+		const parts = [...(collection.parts ?? [])].sort((a, b) =>
+			(a.release_date || "9999").localeCompare(b.release_date || "9999"),
+		);
+		const index = parts.findIndex(
+			(part) => String(part.id) === String(tmdbId),
+		);
+		if (index === -1) return null;
+		//
+		return {
+			// removes collection from all series title
+			series_title:
+				collection.name?.replace(/\s*Collection$/i, "").trim() || null,
+			position: String(index + 1),
+			prequel: parts[index - 1]?.title ?? null,
+			sequel: parts[index + 1]?.title ?? null,
+		};
+	} catch (error) {
+		console.error("TMDB collection fetch failed: ", error.message);
+		return null;
+	}
+}
+
+// build everything
+export async function useMovieTmdbAPI(req, res) {
+	try {
+		const userId = req.user.id;
+		const { title, year } = req.query;
+
+		// first call
+		const match = await searchMovie(title, year);
+		if (!match) {
+			return res.status(404).json({
+				success: false,
+				message: "Movie not found",
+				error: "No movie results",
+			});
+		}
+		const tmdbId = String(match.id);
+
+		// check for dup
+		if (await checkDuplicate("movies", "tmdb_id", tmdbId, userId)) {
+			return res.status(409).json({
+				success: false,
+				title: match.title,
+				message: `Movie "${match.title}" already in your library`,
+				error: "Duplicate found",
+			});
+		}
+
+		// second call
+		const details = await getMovieDetails(tmdbId);
+		const imdbId = details.external_ids?.imdb_id || null;
+		if (!imdbId) {
+			return res.status(404).json({
+				success: false,
+				message: `No IMDb id on record for "${match.title}"`,
+				error: "Missing imdb id",
+			});
+		}
+
+		// legacy some rows are missing tmdbId -- 2nd dup check
+		if (await checkDuplicate("movies", "imdb_id", imdbId, userId)) {
+			return res.status(409).json({
+				success: false,
+				title: match.title,
+				message: `Movie "${match.title}" already in your library -- via imdbId`,
+				error: "Duplicate found",
+			});
+		}
+
+		// third call
+		const series = await resolveSeries(details, tmdbId);
+
+		// get imdb rating
+		const ratings = await getImdbRatings([imdbId]);
+
+		res.status(200).json({
+			success: true,
+			data: {
+				imdbId,
+				tmdb_id: tmdbId,
+				title: details.title || match.title,
+				director: getDirector(details.credits),
+				released_date: getReleaseYear(details.release_date),
+				imdbRating: ratings[imdbId]?.rating ?? null,
+				poster_url: getPosterUrl(details.poster_path),
+				backdrop_url: getPosterUrl(details.backdrop_path),
+				series,
+			},
+		});
+	} catch (error) {
+		console.error("TMDB movie meta fetch failed: ", error);
+		res.status(error.status ? error.status : 500).json({
+			success: false,
+			message: "Failed to fetch movie from TMDB",
+			error: error.message,
+		});
+	}
+}
+
+// used for reload
+export async function useMovieTmdbByIdAPI(req, res) {
+	try {
+		const tmdbId = req.query.tmdbId;
+
+		const details = await getMovieDetails(tmdbId);
+		const imdbId = details.external_ids?.imdb_id || null;
+		const series = await resolveSeries(details, tmdbId);
+		const ratings = imdbId ? await getImdbRatings([imdbId]) : {};
+
+		res.status(200).json({
+			success: true,
+			data: {
+				imdbId,
+				tmdb_id: tmdbId,
+				title: details.title,
+				director: getDirector(details.credits),
+				released_date: getReleaseYear(details.release_date),
+				imdbRating: imdbId ? (ratings[imdbId]?.rating ?? null) : null,
+				poster_url: getPosterUrl(details.poster_path),
+				backdrop_url: getPosterUrl(details.backdrop_path),
+				series,
+			},
+		});
+	} catch (error) {
+		console.error("TMDB movie by id failed: ", error);
+		res.status(error.status ? error.status : 500).json({
+			success: false,
+			message: "Failed to fetch movie from TMDB",
+			error: error.message,
+		});
+	}
 }
