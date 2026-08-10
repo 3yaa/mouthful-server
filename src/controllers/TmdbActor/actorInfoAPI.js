@@ -90,7 +90,7 @@ export async function useTmdbMovieCastAPI(req, res) {
 
 export async function useTmdbActorWorksAPI(req, res) {
 	try {
-		const { actorId } = req.query;
+		const { actorId, role } = req.query;
 		const tmdbRes = await fetch(
 			`https://api.themoviedb.org/3/person/${actorId}/combined_credits?api_key=${process.env.TMDB_API_KEY}`,
 		);
@@ -98,16 +98,21 @@ export async function useTmdbActorWorksAPI(req, res) {
 		const data = await tmdbRes.json();
 
 		const seen = new Set();
-		const works = data.cast
-			.filter((w) => {
-				const c = (w.character ?? "").toLowerCase();
-				return (
-					w.popularity > 0 &&
-					w.character &&
-					!c.includes("self") &&
-					!c.includes("mc")
-				);
-			})
+		// a director's own films are crew credits
+		const credits =
+			role === "director"
+				? data.crew.filter((w) => w.job === "Director")
+				: data.cast.filter((w) => {
+						const c = (w.character ?? "").toLowerCase();
+						return (
+							w.character &&
+							!c.includes("self") &&
+							!c.includes("mc")
+						);
+					});
+
+		const works = credits
+			.filter((w) => w.popularity > 0)
 			.map((w) => ({
 				id: w.id,
 				title: w.title ?? w.name ?? "Unknown",
