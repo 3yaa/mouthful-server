@@ -66,7 +66,18 @@ export async function useTmdbMovieCastAPI(req, res) {
 				? `${PROFILE_BASE}${m.profile_path}`
 				: null,
 		}));
-		res.status(200).json({ success: true, cast });
+		//
+		const directors = data.crew
+			.filter((c) => c.job === "Director")
+			.map((d) => ({
+				id: d.id,
+				name: d.name,
+				character: "Director",
+				profile_path: d.profile_path
+					? `${PROFILE_BASE}${d.profile_path}`
+					: null,
+			}));
+		res.status(200).json({ success: true, cast, directors });
 	} catch (e) {
 		console.error("Failed to fetch movie cast from TMDB: ", e);
 		res.status(500).json({
