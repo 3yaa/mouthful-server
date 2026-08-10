@@ -140,6 +140,7 @@ export const validateMovieRefresh = (req, res, next) => {
 		"tmdbId",
 		"director",
 		"dateReleased",
+		"title",
 	];
 	// check if exists
 	if (!updates || Object.keys(updates).length === 0) {
