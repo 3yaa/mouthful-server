@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { checkDuplicate } from "../../utils/checkDuplicate.js";
-import { getLogoUrl } from "../../utils/tmdbLogo.js";
+import { getLogoUrls } from "../../utils/tmdbLogo.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
@@ -143,6 +143,9 @@ export async function useMovieTmdbAPI(req, res) {
 		// get imdb rating
 		const ratings = await getImdbRatings([imdbId]);
 
+		// ranked -- logo_urls
+		const logos = getLogoUrls(details.images);
+
 		res.status(200).json({
 			success: true,
 			data: {
@@ -154,7 +157,8 @@ export async function useMovieTmdbAPI(req, res) {
 				imdbRating: ratings[imdbId]?.rating ?? null,
 				poster_url: getPosterUrl(details.poster_path),
 				backdrop_url: getPosterUrl(details.backdrop_path),
-				logo_url: getLogoUrl(details.images),
+				logo_url: logos[0] ?? null,
+				logos,
 				series,
 			},
 		});
@@ -178,6 +182,9 @@ export async function useMovieTmdbByIdAPI(req, res) {
 		const series = await resolveSeries(details, tmdbId);
 		const ratings = imdbId ? await getImdbRatings([imdbId]) : {};
 
+		// ranked -- logo_url is just the pick the client opens on
+		const logos = getLogoUrls(details.images);
+
 		res.status(200).json({
 			success: true,
 			data: {
@@ -189,7 +196,8 @@ export async function useMovieTmdbByIdAPI(req, res) {
 				imdbRating: imdbId ? (ratings[imdbId]?.rating ?? null) : null,
 				poster_url: getPosterUrl(details.poster_path),
 				backdrop_url: getPosterUrl(details.backdrop_path),
-				logo_url: getLogoUrl(details.images),
+				logo_url: logos[0] ?? null,
+				logos,
 				series,
 			},
 		});

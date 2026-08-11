@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { getLogoUrl } from "../../utils/tmdbLogo.js";
+import { getLogoUrls } from "../../utils/tmdbLogo.js";
 
 dotenv.config();
 
@@ -25,6 +25,8 @@ export async function useTmdbTvAPI(req, res) {
         error: "No show results",
       });
     }
+    // ranked -- logo_urls
+    const logos = getLogoUrls(show.images);
     // data clean up
     const processedShow = {
       seasons: show.seasons
@@ -47,7 +49,8 @@ export async function useTmdbTvAPI(req, res) {
       backdrop_url: show.backdrop_path
         ? `https://image.tmdb.org/t/p/w1280${show.backdrop_path}`
         : null,
-      logo_url: getLogoUrl(show.images),
+      logo_url: logos[0] ?? null,
+      logos,
     };
     //
     res.status(200).json({
