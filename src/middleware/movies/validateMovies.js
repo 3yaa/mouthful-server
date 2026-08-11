@@ -1,6 +1,17 @@
 const MAX_NOTE_LENGTH = 1000;
 const VALID_STATUSES = ["Want to Watch", "Completed", "Dropped"];
 
+// cover is a jsonb { url, color } -- color is optional so a poster can be saved
+// before its palette has been read off the image
+const isInvalidCover = (cover) =>
+	typeof cover !== "object" ||
+	Array.isArray(cover) ||
+	typeof cover.url !== "string" ||
+	!cover.url ||
+	(cover.color !== undefined &&
+		cover.color !== null &&
+		typeof cover.color !== "string");
+
 export const validateMovieId = (req, res, next) => {
 	const movieId = req.params.id;
 
@@ -130,7 +141,7 @@ export const validateMovieRefresh = (req, res, next) => {
 	const updates = req.body;
 	const allowedFields = [
 		"indirectUpdate",
-		"posterUrl",
+		"cover",
 		"backdropUrl",
 		"seriesTitle",
 		"placeInSeries",
@@ -159,12 +170,22 @@ export const validateMovieRefresh = (req, res, next) => {
 			message: "Invalid refresh field provided",
 		});
 	}
+	// cover
+	if (updates.cover !== undefined && updates.cover !== null) {
+		if (isInvalidCover(updates.cover)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid cover field provided (must be { url, color } or null)",
+			});
+		}
+	}
 
 	next();
 };
 
 export const validateMovieCreate = (req, res, next) => {
-	const { title, dateReleased, status, imdbId, tmdbId } = req.body;
+	const { title, dateReleased, status, imdbId, tmdbId, cover } = req.body;
 	// REQUIRED FIELDS
 	// title
 	if (!title || title.trim() === "") {
@@ -215,6 +236,16 @@ export const validateMovieCreate = (req, res, next) => {
 			});
 		}
 		req.body.dateReleased = parsedYear;
+	}
+	// cover
+	if (cover !== undefined && cover !== null) {
+		if (isInvalidCover(cover)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid cover field provided (must be { url, color } or null)",
+			});
+		}
 	}
 
 	next();

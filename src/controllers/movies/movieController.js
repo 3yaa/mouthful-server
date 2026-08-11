@@ -6,7 +6,7 @@ const convertMovieToCamelCase = (movie) => ({
 	dateCreated: movie.date_created,
 	title: movie.title,
 	director: movie.director,
-	posterUrl: movie.poster_url,
+	cover: movie.cover ?? null,
 	backdropUrl: movie.backdrop_url,
 	dateReleased: movie.date_released,
 	seriesTitle: movie.series_title,
@@ -142,7 +142,6 @@ const camelToSnakeMapping = {
 	lastUpdated: "last_updated",
 	seriesTitle: "series_title",
 	placeInSeries: "place_in_series",
-	posterUrl: "poster_url",
 	backdropUrl: "backdrop_url",
 	dateReleased: "date_released",
 	tmdbId: "tmdb_id",
@@ -228,7 +227,7 @@ export const createMovie = async (req, res) => {
 		const {
 			title,
 			director,
-			posterUrl,
+			cover: coverObj,
 			backdropUrl,
 			dateReleased,
 			seriesTitle,
@@ -247,7 +246,7 @@ export const createMovie = async (req, res) => {
     INSERT INTO movies (
       title,
       director,
-      poster_url,
+      cover,
       backdrop_url,
       date_released,
       series_title,
@@ -269,7 +268,7 @@ export const createMovie = async (req, res) => {
 		const values = [
 			title,
 			director,
-			posterUrl,
+			coverObj ?? null,
 			backdropUrl,
 			dateReleased,
 			seriesTitle,

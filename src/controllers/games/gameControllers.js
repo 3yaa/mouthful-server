@@ -5,7 +5,7 @@ const convertGameToCamelCase = (game) => ({
   dateCreated: game.date_created,
   title: game.title,
   studio: game.studio,
-  posterUrl: game.poster_url,
+  cover: game.cover ?? null,
   backdropUrl: game.backdrop_url,
   dateReleased: game.date_released,
   mainTitle: game.main_title,
@@ -127,7 +127,6 @@ export const getGame = async (req, res) => {
 const camelToSnakeMapping = {
   dateCompleted: "date_completed",
   lastUpdated: "last_updated",
-  posterUrl: "poster_url",
   backdropUrl: "backdrop_url",
   dateReleased: "date_released",
   mainTitle: "main_title",
@@ -212,7 +211,7 @@ export const createGame = async (req, res) => {
     const {
       title,
       studio,
-      posterUrl,
+      cover: coverObj,
       backdropUrl,
       dateReleased,
       mainTitle,
@@ -229,7 +228,7 @@ export const createGame = async (req, res) => {
     INSERT INTO games (
       title,
       studio,
-      poster_url,
+      cover,
       backdrop_url,
       date_released,
       main_title,
@@ -249,7 +248,7 @@ export const createGame = async (req, res) => {
     const values = [
       title,
       studio,
-      posterUrl,
+      coverObj ?? null,
       backdropUrl,
       dateReleased,
       mainTitle,
