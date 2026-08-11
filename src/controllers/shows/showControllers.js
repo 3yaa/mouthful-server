@@ -7,6 +7,7 @@ const convertShowToCamelCase = (show) => ({
   studio: show.studio,
   posterUrl: show.poster_url,
   backdropUrl: show.backdrop_url,
+  logoUrl: show.logo_url,
   dateReleased: show.date_released,
   seasons: show.seasons,
   curSeasonIndex: show.cur_season_index,
@@ -134,6 +135,7 @@ const camelToSnakeMapping = {
   imdbId: "imdb_id",
   posterUrl: "poster_url",
   backdropUrl: "backdrop_url",
+  logoUrl: "logo_url",
   dateReleased: "date_released",
   tmdbId: "tmdb_id",
 };
@@ -218,6 +220,7 @@ export const createShow = async (req, res) => {
       studio,
       posterUrl,
       backdropUrl,
+      logoUrl,
       dateReleased,
       seasons,
       curSeasonIndex,
@@ -236,6 +239,7 @@ export const createShow = async (req, res) => {
       studio,
       poster_url,
       backdrop_url,
+      logo_url,
       date_released,
       seasons,
       cur_season_index,
@@ -249,7 +253,7 @@ export const createShow = async (req, res) => {
       imdb_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
     ) RETURNING *
   `;
     const values = [
@@ -257,6 +261,7 @@ export const createShow = async (req, res) => {
       studio,
       posterUrl,
       backdropUrl,
+      logoUrl ?? null,
       dateReleased,
       seasons ? JSON.stringify(seasons) : null,
       curSeasonIndex,

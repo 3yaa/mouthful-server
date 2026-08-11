@@ -128,6 +128,7 @@ export const validateShowRefresh = (req, res, next) => {
     "indirectUpdate",
     "posterUrl",
     "backdropUrl",
+    "logoUrl",
     "studio",
     "seasons",
     "curSeasonIndex",

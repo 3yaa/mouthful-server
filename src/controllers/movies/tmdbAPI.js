@@ -1,11 +1,12 @@
 import dotenv from "dotenv";
 import { checkDuplicate } from "../../utils/checkDuplicate.js";
+import { getLogoUrl } from "../../utils/tmdbLogo.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
-const TMDB_IMG = "https://image.tmdb.org/t/p/w1280";
+const TMDB_IMG = "https://image.tmdb.org/t/p";
 
 async function tmdbFetch(path, params = {}) {
 	const query = new URLSearchParams({
@@ -30,10 +31,11 @@ async function searchMovie(title, year) {
 	return data.results?.[0] ?? null;
 }
 
-// ---- 2nd call -- director | releae date | poster | backdrop | tmdbID | imdbID | check belongs_to_collection (decides if call 3 is needed)
+// ---- 2nd call -- director | releae date | poster | backdrop | logo | tmdbID | imdbID | check belongs_to_collection (decides if call 3 is needed)
 async function getMovieDetails(tmdbId) {
 	return tmdbFetch(`/movie/${tmdbId}`, {
-		append_to_response: "credits,external_ids",
+		append_to_response: "credits,external_ids,images",
+		include_image_language: "en,null",
 	});
 }
 
@@ -48,7 +50,7 @@ const getDirector = (credits) =>
 		.map((member) => member.name)
 		.join(", ") || null;
 
-const getPosterUrl = (path) => (path ? `${TMDB_IMG}${path}` : null);
+const getPosterUrl = (path) => (path ? `${TMDB_IMG}/w1280${path}` : null);
 
 const getReleaseYear = (releaseDate) => {
 	const year = parseInt(releaseDate?.slice(0, 4));
@@ -152,6 +154,7 @@ export async function useMovieTmdbAPI(req, res) {
 				imdbRating: ratings[imdbId]?.rating ?? null,
 				poster_url: getPosterUrl(details.poster_path),
 				backdrop_url: getPosterUrl(details.backdrop_path),
+				logo_url: getLogoUrl(details.images),
 				series,
 			},
 		});
@@ -186,6 +189,7 @@ export async function useMovieTmdbByIdAPI(req, res) {
 				imdbRating: imdbId ? (ratings[imdbId]?.rating ?? null) : null,
 				poster_url: getPosterUrl(details.poster_path),
 				backdrop_url: getPosterUrl(details.backdrop_path),
+				logo_url: getLogoUrl(details.images),
 				series,
 			},
 		});

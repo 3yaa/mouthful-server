@@ -143,6 +143,7 @@ export const validateMovieRefresh = (req, res, next) => {
 		"indirectUpdate",
 		"cover",
 		"backdropUrl",
+		"logoUrl",
 		"seriesTitle",
 		"placeInSeries",
 		"prequel",

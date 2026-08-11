@@ -8,6 +8,7 @@ const convertMovieToCamelCase = (movie) => ({
 	director: movie.director,
 	cover: movie.cover ?? null,
 	backdropUrl: movie.backdrop_url,
+	logoUrl: movie.logo_url,
 	dateReleased: movie.date_released,
 	seriesTitle: movie.series_title,
 	placeInSeries: movie.place_in_series,
@@ -143,6 +144,7 @@ const camelToSnakeMapping = {
 	seriesTitle: "series_title",
 	placeInSeries: "place_in_series",
 	backdropUrl: "backdrop_url",
+	logoUrl: "logo_url",
 	dateReleased: "date_released",
 	tmdbId: "tmdb_id",
 };
@@ -229,6 +231,7 @@ export const createMovie = async (req, res) => {
 			director,
 			cover: coverObj,
 			backdropUrl,
+			logoUrl,
 			dateReleased,
 			seriesTitle,
 			placeInSeries,
@@ -248,6 +251,7 @@ export const createMovie = async (req, res) => {
       director,
       cover,
       backdrop_url,
+      logo_url,
       date_released,
       series_title,
       place_in_series,
@@ -262,7 +266,7 @@ export const createMovie = async (req, res) => {
       tmdb_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
     ) RETURNING *
   `;
 		const values = [
@@ -270,6 +274,7 @@ export const createMovie = async (req, res) => {
 			director,
 			coverObj ?? null,
 			backdropUrl,
+			logoUrl ?? null,
 			dateReleased,
 			seriesTitle,
 			placeInSeries,

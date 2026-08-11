@@ -1,11 +1,12 @@
 import dotenv from "dotenv";
+import { getLogoUrl } from "../../utils/tmdbLogo.js";
 
 dotenv.config();
 
 export async function useTmdbTvAPI(req, res) {
   try {
     const tmdbId = req.query.tmdbId;
-    const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids`;
+    const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids,images&include_image_language=en,null`;
     // make call
     const response = await fetch(url);
     if (!response.ok) {
@@ -46,6 +47,7 @@ export async function useTmdbTvAPI(req, res) {
       backdrop_url: show.backdrop_path
         ? `https://image.tmdb.org/t/p/w1280${show.backdrop_path}`
         : null,
+      logo_url: getLogoUrl(show.images),
     };
     //
     res.status(200).json({
