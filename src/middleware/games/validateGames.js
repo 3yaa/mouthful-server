@@ -4,227 +4,231 @@ const VALID_STATUSES = ["Playing", "Completed", "Dropped"];
 // cover is a jsonb { url, color } -- color is optional so a poster can be saved
 // before its palette has been read off the image
 const isInvalidCover = (cover) =>
-  typeof cover !== "object" ||
-  Array.isArray(cover) ||
-  typeof cover.url !== "string" ||
-  !cover.url ||
-  (cover.color !== undefined &&
-    cover.color !== null &&
-    typeof cover.color !== "string");
+	typeof cover !== "object" ||
+	Array.isArray(cover) ||
+	typeof cover.url !== "string" ||
+	!cover.url ||
+	(cover.color !== undefined &&
+		cover.color !== null &&
+		typeof cover.color !== "string");
 
 export const validateGameId = (req, res, next) => {
-  const gameId = req.params.id;
+	const gameId = req.params.id;
 
-  if (!gameId || isNaN(gameId) || parseInt(gameId) <= 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Game ID format",
-    });
-  }
+	if (!gameId || isNaN(gameId) || parseInt(gameId) <= 0) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid Game ID format",
+		});
+	}
 
-  req.params.id = parseInt(gameId);
-  next();
+	req.params.id = parseInt(gameId);
+	next();
 };
 
 export const validateGameData = (req, res, next) => {
-  const { score, note, dateCompleted } = req.body;
-  // for score
-  if (score !== undefined) {
-    if (score !== null) {
-      if (
-        typeof score !== "object" ||
-        typeof score.mu !== "number" ||
-        typeof score.phi !== "number" ||
-        !isFinite(score.mu) ||
-        !isFinite(score.phi) ||
-        score.mu < -5000 ||
-        score.mu > 5000 ||
-        score.phi < -5000 ||
-        score.phi > 5000
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid score field provided (must be { mu, phi } or null)",
-        });
-      }
-    }
-  }
-  // for notes
-  if (note !== undefined) {
-    // Allow null/empty to clear notes
-    if (note !== null && typeof note !== "string") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid note field provided (must be string or null)",
-      });
-    }
-    if (note && note.length > MAX_NOTE_LENGTH) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid note field provided (>1000 characters)",
-      });
-    }
-  }
-  // for dateCompleted
-  if (dateCompleted !== undefined) {
-    // Allow null to clear the date
-    if (dateCompleted !== null) {
-      const date = new Date(dateCompleted);
-      if (isNaN(date.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid dateCompleted field provided (must be valid date or null)",
-        });
-      }
-      // Ensure it's not a future date
-      if (date > new Date()) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid dateCompleted field provided (cannot be in the future)",
-        });
-      }
-    }
-  }
+	const { score, note, dateCompleted } = req.body;
+	// for score
+	if (score !== undefined) {
+		if (score !== null) {
+			if (
+				typeof score !== "object" ||
+				typeof score.mu !== "number" ||
+				typeof score.phi !== "number" ||
+				!isFinite(score.mu) ||
+				!isFinite(score.phi) ||
+				score.mu < -5000 ||
+				score.mu > 5000 ||
+				score.phi < -5000 ||
+				score.phi > 5000
+			) {
+				return res.status(400).json({
+					success: false,
+					message:
+						"Invalid score field provided (must be { mu, phi } or null)",
+				});
+			}
+		}
+	}
+	// for notes
+	if (note !== undefined) {
+		// Allow null/empty to clear notes
+		if (note !== null && typeof note !== "string") {
+			return res.status(400).json({
+				success: false,
+				message: "Invalid note field provided (must be string or null)",
+			});
+		}
+		if (note && note.length > MAX_NOTE_LENGTH) {
+			return res.status(400).json({
+				success: false,
+				message: "Invalid note field provided (>1000 characters)",
+			});
+		}
+	}
+	// for dateCompleted
+	if (dateCompleted !== undefined) {
+		// Allow null to clear the date
+		if (dateCompleted !== null) {
+			const date = new Date(dateCompleted);
+			if (isNaN(date.getTime())) {
+				return res.status(400).json({
+					success: false,
+					message:
+						"Invalid dateCompleted field provided (must be valid date or null)",
+				});
+			}
+			// Ensure it's not a future date
+			if (date > new Date()) {
+				return res.status(400).json({
+					success: false,
+					message:
+						"Invalid dateCompleted field provided (cannot be in the future)",
+				});
+			}
+		}
+	}
 
-  next();
+	next();
 };
 
 //
 export const validateGamePatch = (req, res, next) => {
-  const updates = req.body;
-  const allowedFields = [
-    "indirectUpdate",
-    "score",
-    "status",
-    "note",
-    "dateCompleted",
-  ];
-  // for status
-  if (updates.status && !VALID_STATUSES.includes(updates.status)) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Invalid status field provided ('Playing' | 'Completed' | 'Dropped')",
-    });
-  }
-  // check if exists
-  if (!updates || Object.keys(updates).length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "No update field provided",
-    });
-  }
-  // check if allowed
-  const invalidFields = Object.keys(updates).filter(
-    (field) => !allowedFields.includes(field),
-  );
-  if (invalidFields.length > 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid update field provided",
-    });
-  }
+	const updates = req.body;
+	const allowedFields = [
+		"indirectUpdate",
+		"score",
+		"status",
+		"note",
+		"dateCompleted",
+	];
+	// for status
+	if (updates.status && !VALID_STATUSES.includes(updates.status)) {
+		return res.status(400).json({
+			success: false,
+			message:
+				"Invalid status field provided ('Playing' | 'Completed' | 'Dropped')",
+		});
+	}
+	// check if exists
+	if (!updates || Object.keys(updates).length === 0) {
+		return res.status(400).json({
+			success: false,
+			message: "No update field provided",
+		});
+	}
+	// check if allowed
+	const invalidFields = Object.keys(updates).filter(
+		(field) => !allowedFields.includes(field),
+	);
+	if (invalidFields.length > 0) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid update field provided",
+		});
+	}
 
-  next();
+	next();
 };
 
 // metadata-only allowlist for the "reload from source" flow.
 export const validateGameRefresh = (req, res, next) => {
-  const updates = req.body;
-  const allowedFields = [
-    "indirectUpdate",
-    "cover",
-    "backdropUrl",
-    "dlcs",
-    "dlcIndex",
-  ];
-  // check if exists
-  if (!updates || Object.keys(updates).length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "No update field provided",
-    });
-  }
-  // check if allowed
-  const invalidFields = Object.keys(updates).filter(
-    (field) => !allowedFields.includes(field),
-  );
-  if (invalidFields.length > 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid refresh field provided",
-    });
-  }
-  // cover
-  if (updates.cover !== undefined && updates.cover !== null) {
-    if (isInvalidCover(updates.cover)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid cover field provided (must be { url, color } or null)",
-      });
-    }
-  }
+	const updates = req.body;
+	const allowedFields = [
+		"indirectUpdate",
+		"cover",
+		"backdropUrl",
+		"logoUrl",
+		"dlcs",
+		"dlcIndex",
+	];
+	// check if exists
+	if (!updates || Object.keys(updates).length === 0) {
+		return res.status(400).json({
+			success: false,
+			message: "No update field provided",
+		});
+	}
+	// check if allowed
+	const invalidFields = Object.keys(updates).filter(
+		(field) => !allowedFields.includes(field),
+	);
+	if (invalidFields.length > 0) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid refresh field provided",
+		});
+	}
+	// cover
+	if (updates.cover !== undefined && updates.cover !== null) {
+		if (isInvalidCover(updates.cover)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid cover field provided (must be { url, color } or null)",
+			});
+		}
+	}
 
-  next();
+	next();
 };
 
 export const validateGameCreate = (req, res, next) => {
-  const { title, dateReleased, status, igdbId, cover } = req.body;
-  // REQUIRED FIELDS
-  // title
-  if (!title || title.trim() === "") {
-    return res.status(400).json({
-      success: false,
-      message: "No title to create game",
-    });
-  }
-  // igdbId
-  if (!igdbId) {
-    return res.status(400).json({
-      success: false,
-      message: "No igdbId to create game",
-    });
-  }
-  // status
-  if (!status) {
-    req.body.status = "Playing";
-  } else {
-    if (!VALID_STATUSES.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid status provided ('Playing' | 'Completed' | 'Dropped')",
-      });
-    }
-  }
-  // NON REQUIRED
-  // date published
-  if (dateReleased !== undefined) {
-    const parsedYear = parseInt(dateReleased);
-    if (
-      isNaN(parsedYear) ||
-      !Number.isInteger(parsedYear) ||
-      parsedYear < 1000 ||
-      parsedYear > 9999
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Date released must be a 4-digit year (e.g., 2001)",
-      });
-    }
-    req.body.dateReleased = parsedYear;
-  }
-  // cover
-  if (cover !== undefined && cover !== null) {
-    if (isInvalidCover(cover)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid cover field provided (must be { url, color } or null)",
-      });
-    }
-  }
+	const { title, dateReleased, status, igdbId, cover } = req.body;
+	// REQUIRED FIELDS
+	// title
+	if (!title || title.trim() === "") {
+		return res.status(400).json({
+			success: false,
+			message: "No title to create game",
+		});
+	}
+	// igdbId
+	if (!igdbId) {
+		return res.status(400).json({
+			success: false,
+			message: "No igdbId to create game",
+		});
+	}
+	// status
+	if (!status) {
+		req.body.status = "Playing";
+	} else {
+		if (!VALID_STATUSES.includes(status)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid status provided ('Playing' | 'Completed' | 'Dropped')",
+			});
+		}
+	}
+	// NON REQUIRED
+	// date published
+	if (dateReleased !== undefined) {
+		const parsedYear = parseInt(dateReleased);
+		if (
+			isNaN(parsedYear) ||
+			!Number.isInteger(parsedYear) ||
+			parsedYear < 1000 ||
+			parsedYear > 9999
+		) {
+			return res.status(400).json({
+				success: false,
+				message: "Date released must be a 4-digit year (e.g., 2001)",
+			});
+		}
+		req.body.dateReleased = parsedYear;
+	}
+	// cover
+	if (cover !== undefined && cover !== null) {
+		if (isInvalidCover(cover)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid cover field provided (must be { url, color } or null)",
+			});
+		}
+	}
 
-  next();
+	next();
 };
