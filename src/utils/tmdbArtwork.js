@@ -1,6 +1,7 @@
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 
-const MAX_ARTWORK = 12;
+const MAX_POSTERS = 5;
+const MAX_BACKDROPS = 10;
 
 // vote_count breaks ties
 const rank = (a, b) =>
@@ -8,7 +9,7 @@ const rank = (a, b) =>
 	(b.vote_count ?? 0) - (a.vote_count ?? 0);
 
 // tmdb's own pick leads
-function collect(list, primaryPath, size) {
+function collect(list, primaryPath, size, max) {
 	const paths = (list ?? [])
 		.filter((image) => image.file_path)
 		.sort(rank)
@@ -18,13 +19,13 @@ function collect(list, primaryPath, size) {
 	const seen = new Set();
 	return paths
 		.filter((path) => !seen.has(path) && seen.add(path))
-		.slice(0, MAX_ARTWORK)
+		.slice(0, max)
 		.map((path) => `${TMDB_IMG}/${size}${path}`);
 }
 
-// every poster/backdrop tmdb has, best first
+// best first
 export const getPosterUrls = (images, primaryPath, size = "w1280") =>
-	collect(images?.posters, primaryPath, size);
+	collect(images?.posters, primaryPath, size, MAX_POSTERS);
 
 export const getBackdropUrls = (images, primaryPath, size = "w1280") =>
-	collect(images?.backdrops, primaryPath, size);
+	collect(images?.backdrops, primaryPath, size, MAX_BACKDROPS);
