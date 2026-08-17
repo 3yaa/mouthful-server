@@ -75,6 +75,15 @@ export async function useTmdbTvAPI(req, res) {
 					processedShow.isAnime = true;
 					processedShow.seasons = slots;
 					Object.assign(processedShow, meta);
+
+					// anilist's cover joins rest of posters
+					const cover = slots[0]?.posterUrl;
+					if (cover && !processedShow.posters.includes(cover)) {
+						processedShow.posters = [
+							...processedShow.posters,
+							cover,
+						];
+					}
 				}
 			} catch (e) {
 				// enrichment only -- a bad anilist call must not sink the tmdb result
