@@ -496,17 +496,33 @@ export async function buildAnimeChain({
 	// films, non-canon movies, spin-off shorts.
 	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
 
+	// A feature-length special is a film in everything but AniList's label.
+	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
+	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
+	// the two recap films surfaced while the ending did not. Runtime is what
+	// separates these from the 20-minute shorts that belong in side stories.
+	const FEATURE_MINUTES = 45;
+	const isFeature = (n) =>
+		n?.format === "MOVIE" ||
+		(["SPECIAL", "OVA"].includes(n?.format) &&
+			(n?.duration ?? 0) >= FEATURE_MINUTES &&
+			(n?.episodes ?? 1) <= 1);
+
 	// Films leave the slot array entirely. A film is watched in one sitting and
 	// scored in the movies list, so it is not a position the episode stepper
 	// should ever land on -- it is a pointer that says "this comes next, open
 	// it over there". Slots stay purely episodic.
 	const filmNodes = [
+		...Object.values(nodes).filter(
+			(n) => isFeature(n) && n.format !== "MOVIE",
+		),
 		...[...orphanIds]
 			.map((id) => nodes[id])
 			.filter((n) => n?.format === "MOVIE"),
 		...slots.filter((s) => s.isMovie),
 	];
-	for (const film of filmNodes) orphanIds.delete(film.anilistId ?? film.id);
+	const filmIds = new Set(filmNodes.map((f) => f.anilistId ?? f.id));
+	for (const id of filmIds) orphanIds.delete(id);
 
 	const episodic = slots.filter((s) => !s.isMovie);
 	slots.length = 0;
@@ -536,7 +552,11 @@ export async function buildAnimeChain({
 	};
 
 	const sideStories = Object.values(nodes)
-		.filter((n) => SIDE_FORMATS.includes(n.format) || orphanIds.has(n.id))
+		.filter(
+			(n) =>
+				!filmIds.has(n.id) &&
+				(SIDE_FORMATS.includes(n.format) || orphanIds.has(n.id)),
+		)
 		.sort((a, z) => sortKey(a) - sortKey(z))
 		.map((n) => ({ ...shape(n), ...anchorFor(n) }));
 
