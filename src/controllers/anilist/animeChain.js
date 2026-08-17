@@ -375,11 +375,11 @@ function numberByZip(slots, tmdbSeasons) {
 					? `${season.season_number}.${k + 1}`
 					: `${season.season_number}`;
 			// AniList art wins: it is per-entry, so split cours stay visually
-			// distinct, where the tmdb season poster would be shared between
-			// 3.1 and 3.2. It is textless, which the ui covers by overlaying
-			// the show logo. tmdb is only the fallback when anilist has none.
-			// The zip is the only thing that knows which tmdb season a slot
-			// belongs to, so the mapping rides along with it.
+			// distinct where a tmdb season poster would be shared between 3.1
+			// and 3.2. It is textless, which the ui covers by overlaying the
+			// show logo. tmdb is the fallback and stays available as an
+			// alternative. The zip is the only thing that knows which tmdb
+			// season a slot belongs to, so the mapping rides along with it.
 			slot.tmdbPosterUrl = season.posterUrl ?? null;
 			if (!slot.posterUrl) slot.posterUrl = season.posterUrl ?? null;
 		});
@@ -496,39 +496,21 @@ export async function buildAnimeChain({
 	// films, non-canon movies, spin-off shorts.
 	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
 
-	// A film off the spine is still a film you watch. My Hero Academia's four
-	// never touch the tv chain -- each hangs off its own tie-in novel -- so
-	// nothing would have listed them.
-	const looseFilms = [...orphanIds]
-		.map((id) => nodes[id])
-		.filter((n) => n?.format === "MOVIE");
-	for (const film of looseFilms) orphanIds.delete(film.id);
-
-	// Films are placed by release date while tv keeps its spine order. Sequel
-	// edges order the seasons; they say nothing useful about where a film sits,
-	// and trusting them left Attack on Titan's 2018 recut stranded after the
-	// 2022 finale. Undated (unannounced) films fall to the end.
-	const ordering = [
-		...slots.filter((s) => !s.isMovie),
+	// Films leave the slot array entirely. A film is watched in one sitting and
+	// scored in the movies list, so it is not a position the episode stepper
+	// should ever land on -- it is a pointer that says "this comes next, open
+	// it over there". Slots stay purely episodic.
+	const filmNodes = [
+		...[...orphanIds]
+			.map((id) => nodes[id])
+			.filter((n) => n?.format === "MOVIE"),
 		...slots.filter((s) => s.isMovie),
-		...looseFilms.map((film) => ({
-			season_number: 0,
-			episode_count: film.episodes ?? 0,
-			...shape(film),
-			number: null,
-			variants: [],
-		})),
 	];
-	const placed = ordering.filter((s) => !s.isMovie);
-	for (const film of ordering.filter((s) => s.isMovie)) {
-		const at = film.startDate
-			? placed.findIndex((s) => s.startDate && s.startDate > film.startDate)
-			: -1;
-		if (at === -1) placed.push(film);
-		else placed.splice(at, 0, film);
-	}
+	for (const film of filmNodes) orphanIds.delete(film.anilistId ?? film.id);
+
+	const episodic = slots.filter((s) => !s.isMovie);
 	slots.length = 0;
-	slots.push(...placed);
+	slots.push(...episodic);
 	// season_number is the tmdb-shaped fallback -- keep it a real position
 	slots.forEach((s, i) => (s.season_number = i + 1));
 
@@ -558,6 +540,31 @@ export async function buildAnimeChain({
 		.sort((a, z) => sortKey(a) - sortKey(z))
 		.map((n) => ({ ...shape(n), ...anchorFor(n) }));
 
+	// each film records the season it follows, so the ui can offer it at that
+	// transition rather than parking it in the middle of the episode chain
+	const films = filmNodes
+		.map((n) => (n.anilistId ? n : shape(n)))
+		.sort((a, z) => (a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"))
+		.map((film) => ({
+			anilistId: film.anilistId,
+			label: film.label,
+			duration: film.duration ?? null,
+			startDate: film.startDate ?? null,
+			averageScore: film.averageScore ?? null,
+			posterUrl: film.posterUrl ?? null,
+			posterColor: film.posterColor ?? null,
+			...(() => {
+				const date = film.startDate;
+				if (!date) return { afterSlot: null, afterSlotAnilistId: null };
+				let hit = null;
+				for (const a of anchors) if (a.date <= date) hit = a;
+				return {
+					afterSlot: hit?.afterSlot ?? null,
+					afterSlotAnilistId: hit?.afterSlotAnilistId ?? null,
+				};
+			})(),
+		}));
+
 	return {
 		anilistId: root.id,
 		titleRomaji: root.title?.romaji ?? null,
@@ -571,6 +578,7 @@ export async function buildAnimeChain({
 				}
 			: null,
 		slots,
+		films,
 		sideStories,
 	};
 }
