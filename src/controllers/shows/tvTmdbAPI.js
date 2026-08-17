@@ -41,9 +41,9 @@ export async function useTmdbTvAPI(req, res) {
 				.map((season) => ({
 					season_number: season.season_number,
 					episode_count: season.episode_count,
-					// poster_url: season.poster_path
-					//   ? `https://image.tmdb.org/t/p/w500${season.poster_path}`
-					//   : null,
+					posterUrl: season.poster_path
+						? `https://image.tmdb.org/t/p/w500${season.poster_path}`
+						: null,
 				})),
 			// created_by: show.created_by.map((created_by) => ({
 			//   name: created_by.name,
@@ -71,9 +71,10 @@ export async function useTmdbTvAPI(req, res) {
 					tmdbSeasons: processedShow.seasons,
 				});
 				if (chain) {
+					const { slots, ...meta } = chain;
 					processedShow.isAnime = true;
-					processedShow.source = "anilist";
-					Object.assign(processedShow, chain);
+					processedShow.seasons = slots;
+					Object.assign(processedShow, meta);
 				}
 			} catch (e) {
 				// enrichment only -- a bad anilist call must not sink the tmdb result
