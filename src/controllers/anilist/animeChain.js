@@ -91,11 +91,18 @@ async function resolveRoot(nativeTitle, fallbackTitle, year) {
 	return null;
 }
 
-// walks the two nested levels for every anime entry reachable from the root
+// walks the two nested levels for every anime entry reachable from the root,
+// and notes the print works worth expanding a third level (see expandSources)
 function collectIds(root) {
 	const ids = new Map([[root.id, root]]);
+	const sources = new Set();
+
 	const keep = (n) => {
-		if (n?.type !== "ANIME") return;
+		if (!n) return;
+		// tie-in novels and spin-off manga are not entries in their own right,
+		// but films hang off them -- remember them to expand later
+		if (n.type === "MANGA") return void sources.add(n.id);
+		if (n.type !== "ANIME") return;
 		if (![...MAIN_FORMATS, ...SIDE_FORMATS].includes(n.format)) return;
 		if (!ids.has(n.id)) ids.set(n.id, n);
 	};
@@ -109,7 +116,40 @@ function collectIds(root) {
 			keep(inner.node);
 		}
 	}
-	return ids;
+	return { ids, sources };
+}
+
+// My Hero Academia's four films are not children of the manga at all. Each one
+// has a light-novel tie-in hanging off the manga, and the film hangs off that:
+//
+//   manga -> SIDE_STORY -> "THE MOVIE: Futari no Hero" (NOVEL) -> ADAPTATION -> film
+//
+// so a two-level walk finds the novel and stops. One more hop off the print
+// works picks the films up.
+async function expandSources(sourceIds, ids) {
+	const list = [...sourceIds];
+	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
+		const parts = list
+			.slice(i, i + RELATION_CHUNK)
+			.map(
+				(id, k) => `a${k}: Media(id: ${Number(id)}) {
+				id
+				relations { edges { relationType node { ${MEDIA_FIELDS} } } }
+			}`,
+			);
+		const data = await anilistQuery(`query Sources {${parts.join("\n")}}`);
+
+		for (const key of Object.keys(data ?? {})) {
+			for (const edge of data[key]?.relations?.edges ?? []) {
+				if (NOISE_RELATIONS.includes(edge.relationType)) continue;
+				const n = edge.node;
+				if (n?.type !== "ANIME") continue;
+				if (![...MAIN_FORMATS, ...SIDE_FORMATS].includes(n.format))
+					continue;
+				if (!ids.has(n.id)) ids.set(n.id, n);
+			}
+		}
+	}
 }
 
 // aliased calls get the mutual PREQUEL/SEQUEL/ALTERNATIVE edges
@@ -331,7 +371,8 @@ export async function buildAnimeChain({
 	const root = await resolveRoot(nativeTitle, fallbackTitle, year);
 	if (!root) return null;
 
-	const discovered = collectIds(root);
+	const { ids: discovered, sources } = collectIds(root);
+	if (sources.size) await expandSources(sources, discovered);
 
 	// only main-format entries can enter the spine
 	const isShortForm = (n) => n.format === "ONA" && n.episodes === 1;
@@ -385,6 +426,42 @@ export async function buildAnimeChain({
 	// ovas/specials plus anything that never joined the root's chain -- recap
 	// films, non-canon movies, spin-off shorts.
 	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
+
+	// A film off the spine is still a film you watch. My Hero Academia's four
+	// never touch the tv chain -- each hangs off its own tie-in novel -- so
+	// nothing would have listed them.
+	const looseFilms = [...orphanIds]
+		.map((id) => nodes[id])
+		.filter((n) => n?.format === "MOVIE");
+	for (const film of looseFilms) orphanIds.delete(film.id);
+
+	// Films are placed by release date while tv keeps its spine order. Sequel
+	// edges order the seasons; they say nothing useful about where a film sits,
+	// and trusting them left Attack on Titan's 2018 recut stranded after the
+	// 2022 finale. Undated (unannounced) films fall to the end.
+	const ordering = [
+		...slots.filter((s) => !s.isMovie),
+		...slots.filter((s) => s.isMovie),
+		...looseFilms.map((film) => ({
+			season_number: 0,
+			episode_count: film.episodes ?? 0,
+			...shape(film),
+			number: null,
+			variants: [],
+		})),
+	];
+	const placed = ordering.filter((s) => !s.isMovie);
+	for (const film of ordering.filter((s) => s.isMovie)) {
+		const at = film.startDate
+			? placed.findIndex((s) => s.startDate && s.startDate > film.startDate)
+			: -1;
+		if (at === -1) placed.push(film);
+		else placed.splice(at, 0, film);
+	}
+	slots.length = 0;
+	slots.push(...placed);
+	// season_number is the tmdb-shaped fallback -- keep it a real position
+	slots.forEach((s, i) => (s.season_number = i + 1));
 
 	// anchored to the slot they aired after
 	const anchors = slots
