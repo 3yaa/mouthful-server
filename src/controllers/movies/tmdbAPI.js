@@ -1,12 +1,12 @@
 import dotenv from "dotenv";
 import { checkDuplicate } from "../../utils/checkDuplicate.js";
 import { getLogoUrls } from "../../utils/tmdbLogo.js";
+import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
-const TMDB_IMG = "https://image.tmdb.org/t/p";
 
 async function tmdbFetch(path, params = {}) {
 	const query = new URLSearchParams({
@@ -49,8 +49,6 @@ const getDirector = (credits) =>
 		.filter((member) => member.job === "Director")
 		.map((member) => member.name)
 		.join(", ") || null;
-
-const getPosterUrl = (path) => (path ? `${TMDB_IMG}/w1280${path}` : null);
 
 const getReleaseYear = (releaseDate) => {
 	const year = parseInt(releaseDate?.slice(0, 4));
@@ -145,6 +143,9 @@ export async function useMovieTmdbAPI(req, res) {
 
 		// ranked -- logo_urls
 		const logos = getLogoUrls(details.images);
+		// ranked -- poster/backdrop
+		const posters = getPosterUrls(details.images, details.poster_path);
+		const backdrops = getBackdropUrls(details.images, details.backdrop_path);
 
 		res.status(200).json({
 			success: true,
@@ -155,8 +156,10 @@ export async function useMovieTmdbAPI(req, res) {
 				director: getDirector(details.credits),
 				released_date: getReleaseYear(details.release_date),
 				imdbRating: ratings[imdbId]?.rating ?? null,
-				poster_url: getPosterUrl(details.poster_path),
-				backdrop_url: getPosterUrl(details.backdrop_path),
+				poster_url: posters[0] ?? null,
+				backdrop_url: backdrops[0] ?? null,
+				posters,
+				backdrops,
 				logo_url: logos[0] ?? null,
 				logos,
 				series,
@@ -182,8 +185,10 @@ export async function useMovieTmdbByIdAPI(req, res) {
 		const series = await resolveSeries(details, tmdbId);
 		const ratings = imdbId ? await getImdbRatings([imdbId]) : {};
 
-		// ranked -- logo_url is just the pick the client opens on
+		// ranked -- logo_url/poster_url/backdrop_ur
 		const logos = getLogoUrls(details.images);
+		const posters = getPosterUrls(details.images, details.poster_path);
+		const backdrops = getBackdropUrls(details.images, details.backdrop_path);
 
 		res.status(200).json({
 			success: true,
@@ -194,8 +199,10 @@ export async function useMovieTmdbByIdAPI(req, res) {
 				director: getDirector(details.credits),
 				released_date: getReleaseYear(details.release_date),
 				imdbRating: imdbId ? (ratings[imdbId]?.rating ?? null) : null,
-				poster_url: getPosterUrl(details.poster_path),
-				backdrop_url: getPosterUrl(details.backdrop_path),
+				poster_url: posters[0] ?? null,
+				backdrop_url: backdrops[0] ?? null,
+				posters,
+				backdrops,
 				logo_url: logos[0] ?? null,
 				logos,
 				series,

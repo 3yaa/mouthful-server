@@ -1,6 +1,17 @@
 import { pool } from "../../config/db.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
+//
+const safeRatings = async (imdbIds) => {
+	if (!imdbIds.length) return {};
+	try {
+		return await getImdbRatings(imdbIds);
+	} catch (error) {
+		console.error("imdb rating lookup failed: ", error.message);
+		return {};
+	}
+};
+
 const convertMovieToCamelCase = (movie) => ({
 	id: movie.id,
 	dateCreated: movie.date_created,
@@ -83,7 +94,7 @@ export const getMovies = async (req, res) => {
 		// get the imdb score
 		const rows = result.rows;
 		const imdbIds = rows.filter((m) => m.imdb_id).map((m) => m.imdb_id);
-		const ratings = imdbIds.length ? await getImdbRatings(imdbIds) : {};
+		const ratings = await safeRatings(imdbIds);
 
 		const convertedMovie = rows.map((m) => ({
 			...convertMovieToCamelCase(m),
@@ -200,7 +211,7 @@ export const patchMovie = async (req, res) => {
 
 		const row = result.rows[0];
 		// rating
-		const ratings = row.imdb_id ? await getImdbRatings([row.imdb_id]) : {};
+		const ratings = await safeRatings(row.imdb_id ? [row.imdb_id] : []);
 
 		const convertedMovie = {
 			...convertMovieToCamelCase(row),
@@ -292,7 +303,7 @@ export const createMovie = async (req, res) => {
 		const result = await pool.query(query, values);
 		const row = result.rows[0];
 		// get the imdb score
-		const ratings = row.imdb_id ? await getImdbRatings([row.imdb_id]) : {};
+		const ratings = await safeRatings(row.imdb_id ? [row.imdb_id] : []);
 
 		const convertedMovie = {
 			...convertMovieToCamelCase(row),

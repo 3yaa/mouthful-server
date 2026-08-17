@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { getLogoUrls } from "../../utils/tmdbLogo.js";
+import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
 
 dotenv.config();
 
@@ -27,6 +28,9 @@ export async function useTmdbTvAPI(req, res) {
     }
     // ranked -- logo_urls
     const logos = getLogoUrls(show.images);
+    // ranked -- poster/backdrop
+    const posters = getPosterUrls(show.images, show.poster_path, "w500");
+    const backdrops = getBackdropUrls(show.images, show.backdrop_path);
     // data clean up
     const processedShow = {
       seasons: show.seasons
@@ -43,12 +47,10 @@ export async function useTmdbTvAPI(req, res) {
       // })),
       studio: show.production_companies[0].name,
       imdbId: show.external_ids?.imdb_id ?? null,
-      poster_url: show.poster_path
-        ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
-        : null,
-      backdrop_url: show.backdrop_path
-        ? `https://image.tmdb.org/t/p/w1280${show.backdrop_path}`
-        : null,
+      poster_url: posters[0] ?? null,
+      backdrop_url: backdrops[0] ?? null,
+      posters,
+      backdrops,
       logo_url: logos[0] ?? null,
       logos,
     };
