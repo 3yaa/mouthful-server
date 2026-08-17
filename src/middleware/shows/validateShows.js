@@ -133,6 +133,8 @@ export const validateShowRefresh = (req, res, next) => {
     "seasons",
     "curSeasonIndex",
     "curEpisode",
+    "anilistId",
+    "anilistMeta",
   ];
   // check if exists
   if (!updates || Object.keys(updates).length === 0) {
@@ -152,6 +154,8 @@ export const validateShowRefresh = (req, res, next) => {
     });
   }
 
+  // lets patchShow tell a reload apart from an ordinary edit
+  req.isRefresh = true;
   next();
 };
 

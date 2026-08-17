@@ -1,64 +1,68 @@
 import { pool } from "../../config/db.js";
 
 const convertShowToCamelCase = (show) => ({
-  id: show.id,
-  dateCreated: show.date_created,
-  title: show.title,
-  studio: show.studio,
-  posterUrl: show.poster_url,
-  backdropUrl: show.backdrop_url,
-  logoUrl: show.logo_url,
-  dateReleased: show.date_released,
-  seasons: show.seasons,
-  curSeasonIndex: show.cur_season_index,
-  curEpisode: show.cur_episode,
-  status: show.status,
-  score:
-    show.score_mu != null ? { mu: show.score_mu, phi: show.score_phi } : null,
-  dateCompleted: show.date_completed,
-  lastUpdated: show.last_updated,
-  note: show.note,
-  tmdbId: show.tmdb_id,
-  imdbId: show.imdb_id,
-  userId: show.user_id,
+	id: show.id,
+	dateCreated: show.date_created,
+	title: show.title,
+	studio: show.studio,
+	posterUrl: show.poster_url,
+	backdropUrl: show.backdrop_url,
+	logoUrl: show.logo_url,
+	dateReleased: show.date_released,
+	seasons: show.seasons,
+	curSeasonIndex: show.cur_season_index,
+	curEpisode: show.cur_episode,
+	status: show.status,
+	score:
+		show.score_mu != null
+			? { mu: show.score_mu, phi: show.score_phi }
+			: null,
+	dateCompleted: show.date_completed,
+	lastUpdated: show.last_updated,
+	note: show.note,
+	tmdbId: show.tmdb_id,
+	imdbId: show.imdb_id,
+	anilistId: show.anilist_id,
+	anilistMeta: show.anilist_meta,
+	userId: show.user_id,
 });
 
 export const getRandomShows = async (req, res) => {
-  try {
-    const userId = req.user.id;
+	try {
+		const userId = req.user.id;
 
-    const result = await pool.query(
-      `
+		const result = await pool.query(
+			`
       SELECT * FROM shows
       WHERE user_id=$1 AND status='Want to Watch'
       ORDER BY RANDOM()
       LIMIT 10
       `,
-      [userId],
-    );
+			[userId],
+		);
 
-    const convertedShows = result.rows.map(convertShowToCamelCase);
+		const convertedShows = result.rows.map(convertShowToCamelCase);
 
-    res.json({
-      success: true,
-      data: convertedShows,
-    });
-  } catch (error) {
-    console.error("Error fetching random shows: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching random shows",
-      error: error.message,
-    });
-  }
+		res.json({
+			success: true,
+			data: convertedShows,
+		});
+	} catch (error) {
+		console.error("Error fetching random shows: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error fetching random shows",
+			error: error.message,
+		});
+	}
 };
 
 export const getShows = async (req, res) => {
-  try {
-    const userId = req.user.id;
+	try {
+		const userId = req.user.id;
 
-    const result = await pool.query(
-      `
+		const result = await pool.query(
+			`
 			SELECT * FROM shows 
 			WHERE user_id=$1 
 			ORDER BY 
@@ -74,166 +78,207 @@ export const getShows = async (req, res) => {
           ELSE last_updated
         END DESC
 		`,
-      [userId],
-    );
+			[userId],
+		);
 
-    const convertedShows = result.rows.map(convertShowToCamelCase);
+		const convertedShows = result.rows.map(convertShowToCamelCase);
 
-    res.json({
-      success: true,
-      count: convertedShows.length,
-      data: convertedShows,
-    });
-  } catch (error) {
-    console.error("Error fetching shows: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching shows",
-      error: error.message,
-    });
-  }
+		res.json({
+			success: true,
+			count: convertedShows.length,
+			data: convertedShows,
+		});
+	} catch (error) {
+		console.error("Error fetching shows: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error fetching shows",
+			error: error.message,
+		});
+	}
 };
 
 export const getShow = async (req, res) => {
-  try {
-    const showId = req.params.id;
-    const userId = req.user.id;
-    const result = await pool.query(
-      `SELECT * FROM shows WHERE id=$1 AND user_id=$2`,
-      [showId, userId],
-    );
+	try {
+		const showId = req.params.id;
+		const userId = req.user.id;
+		const result = await pool.query(
+			`SELECT * FROM shows WHERE id=$1 AND user_id=$2`,
+			[showId, userId],
+		);
 
-    // if no show were found
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Show not found",
-      });
-    }
+		// if no show were found
+		if (result.rows.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "Show not found",
+			});
+		}
 
-    const convertedShow = convertShowToCamelCase(result.rows[0]);
+		const convertedShow = convertShowToCamelCase(result.rows[0]);
 
-    res.status(200).json({
-      success: true,
-      data: convertedShow,
-    });
-  } catch (error) {
-    console.error("Error fetching show: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching show",
-      error: error.message,
-    });
-  }
+		res.status(200).json({
+			success: true,
+			data: convertedShow,
+		});
+	} catch (error) {
+		console.error("Error fetching show: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error fetching show",
+			error: error.message,
+		});
+	}
 };
 
 const camelToSnakeMapping = {
-  curSeasonIndex: "cur_season_index",
-  curEpisode: "cur_episode",
-  dateCompleted: "date_completed",
-  lastUpdated: "last_updated",
-  imdbId: "imdb_id",
-  posterUrl: "poster_url",
-  backdropUrl: "backdrop_url",
-  logoUrl: "logo_url",
-  dateReleased: "date_released",
-  tmdbId: "tmdb_id",
+	curSeasonIndex: "cur_season_index",
+	curEpisode: "cur_episode",
+	dateCompleted: "date_completed",
+	lastUpdated: "last_updated",
+	imdbId: "imdb_id",
+	posterUrl: "poster_url",
+	backdropUrl: "backdrop_url",
+	logoUrl: "logo_url",
+	dateReleased: "date_released",
+	tmdbId: "tmdb_id",
+	anilistId: "anilist_id",
+	anilistMeta: "anilist_meta",
+};
+
+// A reload rebuilds the slot array from scratch
+const remapProgress = (oldShow, nextSeasons) => {
+	const oldSlot = oldShow?.seasons?.[oldShow.cur_season_index ?? 0];
+	if (!oldSlot?.anilistId || !Array.isArray(nextSeasons)) return null;
+
+	const index = nextSeasons.findIndex(
+		(s) => s.anilistId === oldSlot.anilistId,
+	);
+	if (index === -1 || index === oldShow.cur_season_index) return null;
+	return index;
 };
 
 export const patchShow = async (req, res) => {
-  try {
-    const showId = req.params.id;
-    const userId = req.user.id;
-    const { indirectUpdate, ...cleanUpdates } = req.body;
-    const updates = { ...cleanUpdates };
+	try {
+		const showId = req.params.id;
+		const userId = req.user.id;
+		const { indirectUpdate, ...cleanUpdates } = req.body;
+		const updates = { ...cleanUpdates };
 
-    if (!indirectUpdate) {
-      updates.lastUpdated = new Date();
-    }
+		if (!indirectUpdate) {
+			updates.lastUpdated = new Date();
+		}
 
-    if (updates.score !== undefined) {
-      if (updates.score === null) {
-        updates.score_mu = null;
-        updates.score_phi = null;
-      } else {
-        updates.score_mu = updates.score.mu;
-        updates.score_phi = updates.score.phi;
-      }
-      delete updates.score;
-    }
+		if (updates.score !== undefined) {
+			if (updates.score === null) {
+				updates.score_mu = null;
+				updates.score_phi = null;
+			} else {
+				updates.score_mu = updates.score.mu;
+				updates.score_phi = updates.score.phi;
+			}
+			delete updates.score;
+		}
 
-    // seasons is a jsonb column -- db array (make match)
-    if (updates.seasons !== undefined) {
-      updates.seasons =
-        updates.seasons === null ? null : JSON.stringify(updates.seasons);
-    }
+		//
+		if (req.isRefresh && Array.isArray(updates.seasons)) {
+			const { rows } = await pool.query(
+				`SELECT seasons, cur_season_index, cur_episode FROM shows WHERE id=$1 AND user_id=$2`,
+				[showId, userId],
+			);
+			const remapped = remapProgress(rows[0], updates.seasons);
+			if (remapped !== null) {
+				updates.curSeasonIndex = remapped;
+				// the client clamped the episode against the slot it picked, so re-clamp against the one we actually landed on
+				const maxEp = updates.seasons[remapped]?.episode_count ?? 0;
+				const ep = updates.curEpisode ?? rows[0]?.cur_episode ?? 0;
+				if (maxEp && ep > maxEp) updates.curEpisode = maxEp;
+			}
+		}
 
-    // breaks all the keys into key=$i
-    const setClause = Object.keys(updates)
-      .map((key, index) => {
-        const columnName = camelToSnakeMapping[key] || key;
-        return `${columnName}=$${index + 1}`;
-      })
-      .join(", ");
-    // gets all the values of the keys
-    const values = Object.values(updates);
-    values.push(showId);
-    values.push(userId);
+		// seasons is a jsonb column -- db array (make match)
+		if (updates.seasons !== undefined) {
+			updates.seasons =
+				updates.seasons === null
+					? null
+					: JSON.stringify(updates.seasons);
+		}
+		// side-story anchors reference slot numbers, so it must land in the same update as seasons or the anchors go stale
+		if (updates.anilistMeta !== undefined) {
+			updates.anilistMeta =
+				updates.anilistMeta === null
+					? null
+					: JSON.stringify(updates.anilistMeta);
+		}
 
-    const query = `
+		// breaks all the keys into key=$i
+		const setClause = Object.keys(updates)
+			.map((key, index) => {
+				const columnName = camelToSnakeMapping[key] || key;
+				return `${columnName}=$${index + 1}`;
+			})
+			.join(", ");
+		// gets all the values of the keys
+		const values = Object.values(updates);
+		values.push(showId);
+		values.push(userId);
+
+		const query = `
 		UPDATE shows
 		SET ${setClause} WHERE id=$${values.length - 1} AND user_id=$${
-      values.length
-    } RETURNING * 
+			values.length
+		} RETURNING * 
 		`;
-    const result = await pool.query(query, values);
+		const result = await pool.query(query, values);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Show not found",
-      });
-    }
+		if (result.rows.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "Show not found",
+			});
+		}
 
-    const convertedShow = convertShowToCamelCase(result.rows[0]);
+		const convertedShow = convertShowToCamelCase(result.rows[0]);
 
-    res.status(200).json({
-      success: true,
-      message: "Show updated successfully",
-      data: convertedShow,
-    });
-  } catch (error) {
-    console.error("Error updating show: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error updating show",
-      error: error.message,
-    });
-  }
+		res.status(200).json({
+			success: true,
+			message: "Show updated successfully",
+			data: convertedShow,
+		});
+	} catch (error) {
+		console.error("Error updating show: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error updating show",
+			error: error.message,
+		});
+	}
 };
 
 export const createShow = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const {
-      title,
-      studio,
-      posterUrl,
-      backdropUrl,
-      logoUrl,
-      dateReleased,
-      seasons,
-      curSeasonIndex,
-      curEpisode,
-      status,
-      score: scoreObj,
-      dateCompleted,
-      note,
-      tmdbId,
-      imdbId,
-    } = req.body;
+	try {
+		const userId = req.user.id;
+		const {
+			title,
+			studio,
+			posterUrl,
+			backdropUrl,
+			logoUrl,
+			dateReleased,
+			seasons,
+			curSeasonIndex,
+			curEpisode,
+			status,
+			score: scoreObj,
+			dateCompleted,
+			note,
+			tmdbId,
+			imdbId,
+			anilistId,
+			anilistMeta,
+		} = req.body;
 
-    const query = `
+		const query = `
     INSERT INTO shows (
       title,
       studio,
@@ -251,89 +296,94 @@ export const createShow = async (req, res) => {
       note,
       tmdb_id,
       imdb_id,
+      anilist_id,
+      anilist_meta,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
     ) RETURNING *
   `;
-    const values = [
-      title,
-      studio,
-      posterUrl,
-      backdropUrl,
-      logoUrl ?? null,
-      dateReleased,
-      seasons ? JSON.stringify(seasons) : null,
-      curSeasonIndex,
-      curEpisode,
-      status,
-      scoreObj?.mu ?? null,
-      scoreObj?.phi ?? null,
-      dateCompleted,
-      note,
-      tmdbId,
-      imdbId ?? null,
-      userId,
-    ];
-    const result = await pool.query(query, values);
+		const values = [
+			title,
+			studio,
+			posterUrl,
+			backdropUrl,
+			logoUrl ?? null,
+			dateReleased,
+			seasons ? JSON.stringify(seasons) : null,
+			curSeasonIndex,
+			curEpisode,
+			status,
+			scoreObj?.mu ?? null,
+			scoreObj?.phi ?? null,
+			dateCompleted,
+			note,
+			tmdbId,
+			imdbId ?? null,
+			anilistId ?? null,
+			anilistMeta ? JSON.stringify(anilistMeta) : null,
+			userId,
+		];
+		const result = await pool.query(query, values);
 
-    const convertedShow = convertShowToCamelCase(result.rows[0]);
+		const convertedShow = convertShowToCamelCase(result.rows[0]);
 
-    res.status(201).json({
-      success: true,
-      message: "Show Created Successfully",
-      data: convertedShow,
-    });
-  } catch (error) {
-    console.error("Error creating show: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error creating show",
-      error: error.message,
-    });
-  }
+		res.status(201).json({
+			success: true,
+			message: "Show Created Successfully",
+			data: convertedShow,
+		});
+	} catch (error) {
+		console.error("Error creating show: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error creating show",
+			error: error.message,
+		});
+	}
 };
 
 export const deleteShow = async (req, res) => {
-  try {
-    const showId = req.params.id;
-    const userId = req.user.id;
+	try {
+		const showId = req.params.id;
+		const userId = req.user.id;
 
-    // delete show
-    const result = await pool.query(
-      "DELETE FROM shows WHERE id=$1 AND user_id=$2 RETURNING *",
-      [showId, userId],
-    );
+		// delete show
+		const result = await pool.query(
+			"DELETE FROM shows WHERE id=$1 AND user_id=$2 RETURNING *",
+			[showId, userId],
+		);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Show not found",
-      });
-    }
+		if (result.rows.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "Show not found",
+			});
+		}
 
-    const convertedShow = convertShowToCamelCase(result.rows[0]);
+		const convertedShow = convertShowToCamelCase(result.rows[0]);
 
-    res.status(200).json({
-      success: true,
-      message: "Show deleted successfully",
-      data: convertedShow,
-    });
-  } catch (error) {
-    console.error("Error deleting show: ", error);
+		res.status(200).json({
+			success: true,
+			message: "Show deleted successfully",
+			data: convertedShow,
+		});
+	} catch (error) {
+		console.error("Error deleting show: ", error);
 
-    // Handle foreign key constraints
-    if (error.code === "23503") {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot delete show because it is referenced by other records",
-      });
-    }
+		// Handle foreign key constraints
+		if (error.code === "23503") {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Cannot delete show because it is referenced by other records",
+			});
+		}
 
-    res.status(500).json({
-      success: false,
-      message: "Error deleting show",
-      error: error.message,
-    });
-  }
+		res.status(500).json({
+			success: false,
+			message: "Error deleting show",
+			error: error.message,
+		});
+	}
 };

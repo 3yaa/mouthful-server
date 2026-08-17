@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
-import { checkDuplicate } from "../../utils/checkDuplicate.js";
-import { getLogoUrls } from "../../utils/tmdbLogo.js";
-import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
+import { checkDuplicate } from "../utils/checkDuplicate.js";
+import { getLogoUrls } from "../utils/tmdbLogo.js";
+import { getBackdropUrls, getPosterUrls } from "../utils/tmdbArtwork.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 
 dotenv.config();
@@ -90,7 +90,7 @@ export async function useMovieTmdbAPI(req, res) {
 	try {
 		const userId = req.user.id;
 		const { title, year, reload } = req.query;
-		// reloading a legacy row 
+		// reloading a legacy row
 		const isReload = reload === "1";
 
 		// first call
@@ -105,7 +105,10 @@ export async function useMovieTmdbAPI(req, res) {
 		const tmdbId = String(match.id);
 
 		// check for dup
-		if (!isReload && (await checkDuplicate("movies", "tmdb_id", tmdbId, userId))) {
+		if (
+			!isReload &&
+			(await checkDuplicate("movies", "tmdb_id", tmdbId, userId))
+		) {
 			return res.status(409).json({
 				success: false,
 				title: match.title,
@@ -126,7 +129,10 @@ export async function useMovieTmdbAPI(req, res) {
 		}
 
 		// legacy some rows are missing tmdbId -- 2nd dup check
-		if (!isReload && (await checkDuplicate("movies", "imdb_id", imdbId, userId))) {
+		if (
+			!isReload &&
+			(await checkDuplicate("movies", "imdb_id", imdbId, userId))
+		) {
 			return res.status(409).json({
 				success: false,
 				title: match.title,
@@ -145,7 +151,10 @@ export async function useMovieTmdbAPI(req, res) {
 		const logos = getLogoUrls(details.images);
 		// ranked -- poster/backdrop
 		const posters = getPosterUrls(details.images, details.poster_path);
-		const backdrops = getBackdropUrls(details.images, details.backdrop_path);
+		const backdrops = getBackdropUrls(
+			details.images,
+			details.backdrop_path,
+		);
 
 		res.status(200).json({
 			success: true,
@@ -188,7 +197,10 @@ export async function useMovieTmdbByIdAPI(req, res) {
 		// ranked -- logo_url/poster_url/backdrop_ur
 		const logos = getLogoUrls(details.images);
 		const posters = getPosterUrls(details.images, details.poster_path);
-		const backdrops = getBackdropUrls(details.images, details.backdrop_path);
+		const backdrops = getBackdropUrls(
+			details.images,
+			details.backdrop_path,
+		);
 
 		res.status(200).json({
 			success: true,
