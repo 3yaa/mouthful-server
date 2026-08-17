@@ -65,6 +65,8 @@ function shape(n) {
 		startDate: asDate(n),
 		averageScore: n.averageScore ?? null,
 		posterUrl: n.coverImage?.extraLarge ?? null,
+		// kept even when a tmdb season poster wins, so the picker can offer it
+		anilistPosterUrl: n.coverImage?.extraLarge ?? null,
 		posterColor: n.coverImage?.color ?? null,
 	};
 }
@@ -173,6 +175,57 @@ async function fetchRelations(ids) {
 		}
 	}
 	return out;
+}
+
+// Full metadata plus edges, for entries discovered after the initial walk.
+async function fetchNodes(ids) {
+	const list = [...ids];
+	const out = {};
+	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
+		const parts = list
+			.slice(i, i + RELATION_CHUNK)
+			.map(
+				(id, k) => `a${k}: Media(id: ${Number(id)}) {
+				${MEDIA_FIELDS}
+				relations { edges { relationType node { id type format } } }
+			}`,
+			);
+		const data = await anilistQuery(`query Nodes {${parts.join("\n")}}`);
+		for (const key of Object.keys(data ?? {})) {
+			const node = data[key];
+			if (node) out[node.id] = node;
+		}
+	}
+	return out;
+}
+
+// Long-running franchises outrun the two-level walk. Every JoJo part adapts a
+// different manga, so Diamond is Unbreakable hangs off a volume the root has
+// never heard of -- discovery stopped at the Egypt arc and the show came back
+// with 3 of its 6 seasons. Follow the sequel chain outward instead, until it
+// stops turning up entries we have not already seen.
+const MAX_SPINE_ROUNDS = 6;
+
+async function growSpine(nodes, discovered) {
+	for (let round = 0; round < MAX_SPINE_ROUNDS; round++) {
+		const missing = new Set();
+		for (const id of Object.keys(nodes)) {
+			for (const edge of nodes[id]?.relations?.edges ?? []) {
+				if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+				const n = edge.node;
+				if (n?.type !== "ANIME" || !MAIN_FORMATS.includes(n.format))
+					continue;
+				if (!nodes[n.id]) missing.add(n.id);
+			}
+		}
+		if (!missing.size) return;
+
+		const fetched = await fetchNodes(missing);
+		for (const node of Object.values(fetched)) {
+			nodes[node.id] = node;
+			discovered.set(node.id, node);
+		}
+	}
 }
 
 // ALTERNATIVE means "same story, different cut"
@@ -321,6 +374,14 @@ function numberByZip(slots, tmdbSeasons) {
 				bucket.length > 1
 					? `${season.season_number}.${k + 1}`
 					: `${season.season_number}`;
+			// AniList art wins: it is per-entry, so split cours stay visually
+			// distinct, where the tmdb season poster would be shared between
+			// 3.1 and 3.2. It is textless, which the ui covers by overlaying
+			// the show logo. tmdb is only the fallback when anilist has none.
+			// The zip is the only thing that knows which tmdb season a slot
+			// belongs to, so the mapping rides along with it.
+			slot.tmdbPosterUrl = season.posterUrl ?? null;
+			if (!slot.posterUrl) slot.posterUrl = season.posterUrl ?? null;
 		});
 	}
 	// unreleased entries have no TMDB counterpart -- number them off the end
@@ -391,6 +452,14 @@ export async function buildAnimeChain({
 			...node,
 			relations: edges[id]?.relations ?? node.relations,
 		};
+	}
+	await growSpine(nodes, discovered);
+
+	// growSpine can add entries the first pass never saw, so the main set has
+	// to be taken again rather than reused from above
+	for (const node of Object.values(nodes)) {
+		if (MAIN_FORMATS.includes(node.format) && !isShortForm(node))
+			mainIds.add(node.id);
 	}
 
 	const groups = groupAlternatives(nodes, mainIds);
