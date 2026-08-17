@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { checkDuplicate } from "../../utils/checkDuplicate.js";
+import { checkDuplicate } from "../utils/checkDuplicate.js";
 
 dotenv.config();
 

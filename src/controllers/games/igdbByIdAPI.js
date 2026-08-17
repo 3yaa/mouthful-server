@@ -1,5 +1,5 @@
 import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
-import { getSteamGridLogos } from "../../utils/steamGridLogo.js";
+import { getSteamGridLogos } from "../utils/steamGridLogo.js";
 
 // fetch a single game/dlc by its IGDB id -- no duplicate filtering, so it can
 export async function useIgdbByIdAPI(req, res) {

@@ -1,4 +1,4 @@
-import { getSteamGridLogos } from "../../utils/steamGridLogo.js";
+import { getSteamGridLogos } from "../utils/steamGridLogo.js";
 
 export async function useSteamGridLogosAPI(req, res) {
 	try {

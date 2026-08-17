@@ -1,5 +1,5 @@
 import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
-import { checkDuplicate } from "../../utils/checkDuplicate.js";
+import { checkDuplicate } from "../utils/checkDuplicate.js";
 
 export async function useIgdbForDlcAPI(req, res) {
   try {

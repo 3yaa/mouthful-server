@@ -1,6 +1,6 @@
 import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
-import { checkDuplicate } from "../../utils/checkDuplicate.js";
-import { getSteamGridLogos } from "../../utils/steamGridLogo.js";
+import { checkDuplicate } from "../utils/checkDuplicate.js";
+import { getSteamGridLogos } from "../utils/steamGridLogo.js";
 
 export async function useIgdbForGameAPI(req, res) {
 	try {

@@ -1,8 +1,8 @@
 import express from "express";
-import { loginUser } from "../controllers/loginController.js";
-import { logoutUser } from "../controllers/logoutController.js";
-import { refreshToken } from "../controllers/refreshTokenController.js";
-import { registerUser } from "../controllers/registerController.js";
+import { loginUser } from "../controllers/auth/loginController.js";
+import { logoutUser } from "../controllers/auth/logoutController.js";
+import { refreshToken } from "../controllers/auth/refreshTokenController.js";
+import { registerUser } from "../controllers/auth/registerController.js";
 import { validateLogin } from "../middleware/validateAuth.js";
 import { validateRefreshTokenCookie } from "../middleware/validateAuth.js";
 import { validateRegister, isEmailDup } from "../middleware/validateAuth.js";

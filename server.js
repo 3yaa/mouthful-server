@@ -23,7 +23,7 @@ import {
 	useTmdbActorWorksAPI,
 	useTmdbShowCastAPI,
 	useTmdbMovieCastAPI,
-} from "./src/controllers/TmdbActor/actorInfoAPI.js";
+} from "./src/controllers/utils/tmdbActorInfoAPI.js";
 import {
 	validateTmdbActorWorksAPI,
 	validateTmdbCastAPI,
