@@ -213,9 +213,16 @@ async function growSpine(nodes, discovered) {
 			for (const edge of nodes[id]?.relations?.edges ?? []) {
 				if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
 				const n = edge.node;
-				if (n?.type !== "ANIME" || !MAIN_FORMATS.includes(n.format))
-					continue;
-				if (!nodes[n.id]) missing.add(n.id);
+				// any anime format, not just the ones that can become slots:
+				// Hajime no Ippo runs 2000 series -> Champion Road (special)
+				// -> Mashiba vs Kimura (ova) -> New Challenger, so stopping at
+				// non-main formats cut the franchise in half.
+				//
+				// Nodes already known but without edges are queued too: only
+				// main formats get their relations fetched up front, so an
+				// interstitial special sits there as a dead end otherwise.
+				if (n?.type !== "ANIME") continue;
+				if (!nodes[n.id]?.relations) missing.add(n.id);
 			}
 		}
 		if (!missing.size) return;
@@ -260,7 +267,25 @@ function groupAlternatives(nodes, mainIds) {
 }
 
 // orders the collapsed groups into a linear watch order by following SEQUEL edges
-function buildSpine(nodes, groups, rootGroup) {
+// Which entries sit on the root's chain, walking PREQUEL/SEQUEL through every
+// anime node rather than only slot-eligible ones. A special sitting between two
+// seasons would otherwise cut the franchise in half.
+function reachableFrom(nodes, rootId) {
+	const seen = new Set([rootId]);
+	const stack = [rootId];
+	while (stack.length) {
+		for (const edge of nodes[stack.pop()]?.relations?.edges ?? []) {
+			if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+			const n = edge.node;
+			if (n?.type !== "ANIME" || seen.has(n.id) || !nodes[n.id]) continue;
+			seen.add(n.id);
+			stack.push(n.id);
+		}
+	}
+	return seen;
+}
+
+function buildSpine(nodes, groups, rootGroup, reachable) {
 	const groupOf = new Map();
 	for (const [root, members] of groups)
 		for (const id of members) groupOf.set(id, root);
@@ -299,9 +324,13 @@ function buildSpine(nodes, groups, rootGroup) {
 		)[0];
 	};
 
-	// the root's connected component
+	// the root's connected component, seeded with everything the wider walk
+	// reached so a chain that runs through a special still counts as one
 	const connected = new Set([rootGroup]);
-	const stack = [rootGroup];
+	for (const [group, members] of groups)
+		if (members.some((id) => reachable.has(id))) connected.add(group);
+
+	const stack = [...connected];
 	while (stack.length) {
 		for (const n of neighbours.get(stack.pop()) ?? []) {
 			if (!connected.has(n)) {
@@ -466,7 +495,13 @@ export async function buildAnimeChain({
 	const rootGroup = [...groups.keys()].find((g) =>
 		groups.get(g).includes(root.id),
 	);
-	const { ordered, orphans, primary } = buildSpine(nodes, groups, rootGroup);
+	const reachable = reachableFrom(nodes, root.id);
+	const { ordered, orphans, primary } = buildSpine(
+		nodes,
+		groups,
+		rootGroup,
+		reachable,
+	);
 
 	const slots = ordered.map((group, index) => {
 		const lead = primary(group);
