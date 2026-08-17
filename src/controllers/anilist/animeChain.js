@@ -508,6 +508,35 @@ export async function buildAnimeChain({
 			(n?.duration ?? 0) >= FEATURE_MINUTES &&
 			(n?.episodes ?? 1) <= 1);
 
+	// A recap compiles episodes rather than telling its own story, so it hangs
+	// off the seasons it covers (PARENT) and adapts nothing. An original film
+	// adapts a print work -- every My Hero Academia film has a tie-in novel --
+	// and those also carry PARENT to mark the season they sit alongside, so
+	// PARENT on its own is not the signal. Having no source is.
+	//
+	//   ~Chronicle~        PARENT x4, no adaptation        -> recap
+	//   Roar of Awakening  PARENT -> S2, no adaptation     -> recap
+	//   Two Heroes         PARENT -> S3, ADAPTATION -> novel -> keep
+	//   Infinity Castle    no PARENT at all                -> keep
+	const sourceId = sourceEdge?.node?.id;
+	const isRecap = (n) => {
+		const edges = n?.relations?.edges ?? [];
+		const compiles = edges.some(
+			(e) => e.relationType === "PARENT" && e.node?.type === "ANIME",
+		);
+		if (!compiles) return false;
+		// both recaps and original films adapt something, so what they adapt is
+		// the tell: a recap points at the show's own source, an original film
+		// at a tie-in written for it.
+		const ownSource = edges.some(
+			(e) =>
+				e.relationType === "ADAPTATION" &&
+				e.node?.type === "MANGA" &&
+				e.node.id !== sourceId,
+		);
+		return !ownSource;
+	};
+
 	// Films leave the slot array entirely. A film is watched in one sitting and
 	// scored in the movies list, so it is not a position the episode stepper
 	// should ever land on -- it is a pointer that says "this comes next, open
@@ -520,7 +549,7 @@ export async function buildAnimeChain({
 			.map((id) => nodes[id])
 			.filter((n) => n?.format === "MOVIE"),
 		...slots.filter((s) => s.isMovie),
-	];
+	].filter((n) => !isRecap(nodes[n.anilistId ?? n.id] ?? n));
 	const filmIds = new Set(filmNodes.map((f) => f.anilistId ?? f.id));
 	for (const id of filmIds) orphanIds.delete(id);
 
