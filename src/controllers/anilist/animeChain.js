@@ -29,6 +29,7 @@ const MEDIA_FIELDS = `
 	title { romaji english native }
 	startDate { year month }
 	coverImage { extraLarge color }
+	bannerImage
 `;
 
 //
@@ -66,6 +67,7 @@ function shape(n) {
 		averageScore: n.averageScore ?? null,
 		posterUrl: n.coverImage?.extraLarge ?? null,
 		posterColor: n.coverImage?.color ?? null,
+		backdropUrl: n.bannerImage ?? null,
 	};
 }
 
