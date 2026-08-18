@@ -3,8 +3,9 @@ const ENDPOINT = "https://graphql.anilist.co";
 // confirmed from the x-ratelimit-limit header
 const RATE_LIMIT = 30;
 const WINDOW_MS = 60 * 1000;
-// franchise TTL
-const CACHE_TTL = 12 * 60 * 60 * 1000;
+// AniList is only consulted for shows that are still airing, so the cache is
+// short enough that a new episode count lands the same day
+const CACHE_TTL = 6 * 60 * 60 * 1000;
 const MAX_429_RETRIES = 2;
 
 // oldest first
