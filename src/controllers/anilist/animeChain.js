@@ -1,5 +1,10 @@
 import { anilistQuery, titleMatches } from "./anilistClient.js";
-import { aodEntry, relatedIds, tmdbIdsFor, tmdbRows } from "./animeIndex.js";
+import {
+	anilistIdOf,
+	aodEntry,
+	relatedKeys,
+	tmdbRows,
+} from "./animeIndex.js";
 import { overridesFor } from "./animeOverrides.js";
 
 // TMDB's own "anime" keyword
@@ -111,6 +116,8 @@ async function resolveUnmapped({ nativeTitle, fallbackTitle, year, tmdbSeasons }
 			anilistId: media.id,
 			titleRomaji: media.title?.romaji ?? null,
 			slots: (tmdbSeasons ?? []).map((season, index) => ({
+				uid: null,
+				anilistId: media.id,
 				season_number: season.season_number,
 				episode_count: season.episode_count,
 				label: null,
@@ -198,7 +205,7 @@ export async function buildAnimeChain({
 
 	// Season 0 is where the mapping files ovas, specials and tie-in films.
 	// A MOVIE-typed row is a film wherever it happens to be filed.
-	const typeOf = (row) => aodEntry(row.al)?.k ?? row.k;
+	const typeOf = (row) => aodEntry(row.i)?.k ?? row.k;
 	const episodicRows = rows.filter(
 		(row) => (row.s ?? 1) > 0 && typeOf(row) !== "MOVIE",
 	);
@@ -210,12 +217,15 @@ export async function buildAnimeChain({
 	// The snapshot is authoritative for finished series and wrong for airing
 	// ones, so only the airing ids -- plus anything the snapshot missed -- cost
 	// a request. A fully finished show resolves without touching the network.
+	// Only AniList-backed entries can be refreshed -- a "d" row has no AniList
+	// record to ask about, and lives on whatever the snapshot last knew.
 	const stale = [];
 	for (const row of rows) {
-		if (row.al == null) continue;
-		const entry = aodEntry(row.al);
+		const id = anilistIdOf(row.i);
+		if (id == null) continue;
+		const entry = aodEntry(row.i);
 		if (!entry || entry.s === "ONGOING" || entry.s === "UPCOMING") {
-			stale.push(row.al);
+			stale.push(id);
 		}
 	}
 	let live = new Map();
@@ -239,8 +249,8 @@ export async function buildAnimeChain({
 
 	const slots = episodicRows.map((row, index) => {
 		const season = row.s ?? 1;
-		const entry = aodEntry(row.al);
-		const media = live.get(row.al);
+		const entry = aodEntry(row.i);
+		const media = live.get(anilistIdOf(row.i));
 
 		// A row with no offset starts at zero; the next row in the same season
 		// starts where this one ends, which is what bounds its length.
@@ -276,7 +286,10 @@ export async function buildAnimeChain({
 			season_number: index + 1,
 			episode_count: episodes ?? 0,
 			tmdbSeason: season,
-			anilistId: row.al ?? null,
+			// the index key, stable whether the entry came from AniList or
+			// AniDB, and the identity everything downstream matches on
+			uid: row.i ?? null,
+			anilistId: anilistIdOf(row.i),
 			label,
 			number: null,
 			episodes,
@@ -325,24 +338,34 @@ export async function buildAnimeChain({
 	// films tmdb never filed under the show -- Mugen Train is related to
 	// Kimetsu season 1 and appears nowhere in its tmdb season list.
 	const overrides = overridesFor(tmdbId);
-	const slotIds = new Set(known.map((slot) => slot.anilistId).filter(Boolean));
+	const slotKeys = new Set(known.map((slot) => slot.uid).filter(Boolean));
 	const extras = new Map();
 	for (const row of extraRows) {
-		if (row.al != null && aodEntry(row.al)) extras.set(row.al, aodEntry(row.al));
+		if (row.i && aodEntry(row.i)) extras.set(row.i, aodEntry(row.i));
 	}
-	for (const id of slotIds) {
-		for (const related of relatedIds(id)) {
-			if (slotIds.has(related) || extras.has(related)) continue;
+	for (const key of slotKeys) {
+		for (const related of relatedKeys(key)) {
+			if (slotKeys.has(related) || extras.has(related)) continue;
 			const entry = aodEntry(related);
+			// Discovery sticks to releases at least one of the big two
+			// trackers recognises. AniDB splits material the others treat as
+			// one release, so admitting every "d" key through relations lists
+			// Attack on Titan's ovas twice and turns Demon Slayer's recap
+			// screenings into six films. A "d" entry MyAnimeList also carries
+			// is a real release AniList simply never indexed -- Attack on
+			// Titan's own finale film is one. Rows tmdb maps to the show
+			// directly are honoured either way.
+			if (related[0] !== "a" && !entry?.m) continue;
 			// TV entries reachable this way are spin-off series with tmdb shows
 			// of their own, not extras belonging to this one
 			if (entry && entry.k !== "TV") extras.set(related, entry);
 		}
 	}
-	for (const id of overrides.exclude) extras.delete(id);
+	for (const key of overrides.exclude) extras.delete(key);
 
-	const shape = (id, entry) => ({
-		anilistId: id,
+	const shape = (key, entry) => ({
+		uid: key,
+		anilistId: anilistIdOf(key),
 		label: entry.t,
 		format: entry.k,
 		episodes: entry.e ?? null,
@@ -356,35 +379,35 @@ export async function buildAnimeChain({
 
 	const films = [];
 	const sideStories = [];
-	for (const [id, entry] of extras) {
+	for (const [key, entry] of extras) {
 		// AOD tags compilations outright, which is what makes recap detection
 		// possible without AniList's typed relation edges. A recap is still
 		// worth listing, just not as a film you are told to go and watch.
-		const film = overrides.films.has(id)
+		const film = overrides.films.has(key)
 			? true
-			: overrides.sides.has(id)
+			: overrides.sides.has(key)
 				? false
 				: isFeature(entry) && !entry.x;
 		if (film) {
 			films.push({
-				...shape(id, entry),
+				...shape(key, entry),
 				// the film's own tmdb id, so opening it hands straight over to
 				// the movie pipeline instead of re-resolving by title
-				tmdbMovieId: tmdbIdsFor(id)?.mv ?? null,
+				tmdbMovieId: entry.mv ?? null,
 			});
 		} else {
-			sideStories.push(shape(id, entry));
+			sideStories.push(shape(key, entry));
 		}
 	}
 	films.sort((a, z) => (a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"));
 	sideStories.sort(
-		(a, z) => chronoKey(aodEntry(a.anilistId)) - chronoKey(aodEntry(z.anilistId)),
+		(a, z) => chronoKey(aodEntry(a.uid)) - chronoKey(aodEntry(z.uid)),
 	);
 
 	const root = known[0];
 	return {
 		anilistId: root?.anilistId ?? null,
-		titleRomaji: aodEntry(root?.anilistId)?.t ?? null,
+		titleRomaji: aodEntry(root?.uid)?.t ?? null,
 		slots: known,
 		films,
 		sideStories,

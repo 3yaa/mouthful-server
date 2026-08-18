@@ -4,10 +4,12 @@
 // where the rest goes, rather than into another heuristic that trades one set
 // of wrong answers for a different one.
 //
-//   exclude  anilist ids that should not appear anywhere in the chain --
+//   exclude  index keys that should not appear anywhere in the chain --
 //            crossovers the relation graph drags in, duplicate entries
-//   films    ids the feature test files as side stories but that are films
-//   sides    ids the feature test calls films but that are shorts or recaps
+//   films    keys the feature test files as side stories but that are films
+//   sides    keys the feature test calls films but that are shorts or recaps
+//
+// Keys are "a<anilist id>" or "d<anidb id>", the same addresses the index uses.
 //
 // Anything listed here is applied after assembly, so an id that stops being
 // wrong upstream can simply be deleted from the list.
@@ -15,7 +17,7 @@
 export const CHAIN_OVERRIDES = {
 	// Isekai Quartet is a crossover with its own tmdb show; the relation graph
 	// reaches it from every series that appears in it.
-	65942: { exclude: [117074, 104454, 110178, 194447] },
+	65942: { exclude: ["a117074", "a104454", "a110178", "a194447"] },
 };
 
 export function overridesFor(tmdbId) {
