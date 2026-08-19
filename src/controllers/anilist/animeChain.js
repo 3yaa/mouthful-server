@@ -1,17 +1,19 @@
 import { anilistQuery, titleMatches } from "./anilistClient.js";
 
-// TMDB's own "anime" keyword
+// TMDB's only job is deciding whether to run at all
 const TMDB_ANIME_KEYWORD = 210024;
 const TMDB_ANIMATION_GENRE = 16;
 const ANIME_ORIGINS = ["JP", "CN", "KR", "TW"];
 
 // donghua are almost always ONA
 const MAIN_FORMATS = ["TV", "ONA", "MOVIE"];
-// promo shorts, tie-ins and recaps -- delete
+// promo shorts, tie-ins and character pages -- delete
 const NOISE_RELATIONS = ["CHARACTER", "OTHER", "SPIN_OFF", "SUMMARY"];
 const SIDE_FORMATS = ["OVA", "SPECIAL", "TV_SHORT"];
 
-// genre+origi
+const SLOT_FORMATS = [...MAIN_FORMATS, ...SIDE_FORMATS];
+
+// genre+origin
 export function isAnime(tmdbDetail) {
 	const genres = (tmdbDetail?.genres ?? []).map((g) => g.id);
 	const keywords = (tmdbDetail?.keywords?.results ?? []).map((k) => k.id);
@@ -24,35 +26,131 @@ export function isAnime(tmdbDetail) {
 	);
 }
 
+// studios ride along per entry: the production house genuinely changes between
+// seasons, which is the whole reason metadata is stored per slot
 const MEDIA_FIELDS = `
-	id type format episodes duration averageScore
+	id type format episodes duration status
 	title { romaji english native }
 	startDate { year month }
+	endDate { year month }
+	studios { edges { isMain node { name } } }
 	coverImage { extraLarge color }
 `;
 
-//
-const RESOLVE = `query Resolve($search: String!, $year: Int) {
-	Page(perPage: 1) {
-		media(type: ANIME, search: $search, seasonYear: $year, sort: SEARCH_MATCH) {
+// Discovery only needs enough to decide whether an id is worth fetching. The
+// full record arrives in the batch below, so the walk stays cheap even three
+// levels deep.
+const REL_NODE = `id type format`;
+
+const ROOT_FRAGMENT = `fragment Root on Media {
+	${MEDIA_FIELDS}
+	relations { edges { relationType node {
+		${REL_NODE}
+		relations { edges { relationType node {
+			${REL_NODE}
+			relations { edges { relationType node { ${REL_NODE} } } }
+		} } }
+	} } }
+}`;
+
+// The fallback search variants go out as aliases in one query instead of up to
+// three sequential round trips. A miss used to cost three; now it costs one.
+// Built dynamically because a null `search` is not "no search" to AniList -- it
+// drops the filter and returns arbitrary popular media.
+function resolveQuery(variants) {
+	const params = variants
+		.map((v, i) => `$s${i}: String!${v.year ? `, $y${i}: Int` : ""}`)
+		.join(", ");
+	const aliases = variants.map(
+		(v, i) => `v${i}: Page(perPage: 1) {
+			media(
+				type: ANIME
+				search: $s${i}${v.year ? `\n\t\t\t\tseasonYear: $y${i}` : ""}
+				sort: SEARCH_MATCH
+			) { ...Root }
+		}`,
+	);
+	return `query Resolve(${params}) {\n${aliases.join("\n")}\n}\n${ROOT_FRAGMENT}`;
+}
+
+// Page.perPage caps at 50. id_in takes the whole chunk in one non-aliased
+// query, which is both fewer round trips and less query complexity than
+// aliased Media(id:) batches.
+const NODE_CHUNK = 50;
+
+const NODES = `query Nodes($ids: [Int]) {
+	Page(perPage: ${NODE_CHUNK}) {
+		media(id_in: $ids) {
 			${MEDIA_FIELDS}
-			relations { edges { relationType node {
-				${MEDIA_FIELDS}
-				relations { edges { relationType node { ${MEDIA_FIELDS} } } }
-			} } }
+			relations { edges { relationType node { ${REL_NODE} } } }
 		}
 	}
 }`;
 
+// Entity-level cache. anilistQuery caches whole queries, which never hits
+// across two shows in the same franchise; this does. Nothing downstream
+// mutates a node -- shape() and the slot builders construct fresh objects --
+// so handing out the cached reference is safe.
+const NODE_TTL = 12 * 60 * 60 * 1000;
+const NODE_CACHE_MAX = 2000;
+const nodeCache = new Map();
+
+async function fetchNodes(ids) {
+	const out = {};
+	const wanted = new Set();
+	const now = Date.now();
+
+	for (const raw of ids) {
+		const id = Number(raw);
+		if (!Number.isFinite(id)) continue;
+		const hit = nodeCache.get(id);
+		if (hit && hit.expires > now) out[id] = hit.node;
+		else wanted.add(id);
+	}
+
+	// sorted so chunk boundaries are stable between requests and anilistQuery's
+	// cache key can actually hit
+	const list = [...wanted].sort((a, z) => a - z);
+
+	const chunks = [];
+	for (let i = 0; i < list.length; i += NODE_CHUNK)
+		chunks.push(list.slice(i, i + NODE_CHUNK));
+
+	// in flight together: the limiter in anilistClient serialises slot-taking,
+	// not the fetch, so these genuinely overlap
+	const pages = await Promise.all(
+		chunks.map((ids) => anilistQuery(NODES, { ids })),
+	);
+
+	for (const data of pages) {
+		for (const node of data?.Page?.media ?? []) {
+			out[node.id] = node;
+			nodeCache.set(node.id, { node, expires: Date.now() + NODE_TTL });
+		}
+	}
+
+	if (nodeCache.size > NODE_CACHE_MAX) {
+		const cutoff = Date.now();
+		for (const [k, v] of nodeCache)
+			if (v.expires <= cutoff) nodeCache.delete(k);
+	}
+	return out;
+}
+
+const fuzzy = (d) =>
+	d?.year ? `${d.year}-${String(d.month ?? 1).padStart(2, "0")}` : null;
+
 const sortKey = (n) =>
 	(n.startDate?.year ?? 9999) * 100 + (n.startDate?.month ?? 1);
 
-const asDate = (n) =>
-	n.startDate?.year
-		? `${n.startDate.year}-${String(n.startDate.month ?? 1).padStart(2, "0")}`
-		: null;
-
 const label = (n) => n.title?.english ?? n.title?.romaji ?? n.title?.native;
+
+const mainStudio = (n) => {
+	const edges = n?.studios?.edges ?? [];
+	return (edges.find((e) => e.isMain) ?? edges[0])?.node?.name ?? null;
+};
+
+const totalMinutes = (n) => (n?.episodes ?? 1) * (n?.duration ?? 0);
 
 function shape(n) {
 	return {
@@ -62,180 +160,173 @@ function shape(n) {
 		isMovie: n.format === "MOVIE",
 		episodes: n.episodes ?? null,
 		duration: n.duration ?? null,
-		startDate: asDate(n),
-		averageScore: n.averageScore ?? null,
+		status: n.status ?? null,
+		startDate: fuzzy(n.startDate),
+		endDate: fuzzy(n.endDate),
+		studio: mainStudio(n),
 		posterUrl: n.coverImage?.extraLarge ?? null,
-		// kept even when a tmdb season poster wins, so the picker can offer it
-		anilistPosterUrl: n.coverImage?.extraLarge ?? null,
 		posterColor: n.coverImage?.color ?? null,
 	};
 }
 
 // resolves the entry the user actually searched for
 async function resolveRoot(nativeTitle, fallbackTitle, year) {
-	for (const [search, seasonYear] of [
-		[nativeTitle, year],
-		[nativeTitle, null],
-		[fallbackTitle, year],
+	const variants = [];
+	// normalised: an undefined year and a null year are the same query, and the
+	// dedupe below compares by value
+	const y = year ?? null;
+	for (const v of [
+		{ search: nativeTitle, year: y },
+		{ search: nativeTitle, year: null },
+		{ search: fallbackTitle, year: y },
 	]) {
-		if (!search) continue;
-		const data = await anilistQuery(RESOLVE, { search, year: seasonYear });
-		const media = data?.Page?.media?.[0];
-		if (!media) continue;
+		if (!v.search) continue;
+		// original_name and name are the same string on most English-titled
+		// shows, and a missing year collapses the first pair
+		if (variants.some((x) => x.search === v.search && x.year === v.year))
+			continue;
+		variants.push(v);
+	}
+	if (!variants.length) return null;
 
+	const variables = {};
+	variants.forEach((v, i) => {
+		variables[`s${i}`] = v.search;
+		if (v.year) variables[`y${i}`] = v.year;
+	});
+
+	const data = await anilistQuery(resolveQuery(variants), variables);
+
+	// same precedence the sequential fallback chain had
+	for (let i = 0; i < variants.length; i++) {
+		const media = data?.[`v${i}`]?.media?.[0];
+		if (!media) continue;
 		const titles = [
 			media.title?.romaji,
 			media.title?.english,
 			media.title?.native,
 		];
-		if (titleMatches(search, titles)) return media;
+		if (titleMatches(variants[i].search, titles)) return media;
 	}
 	return null;
 }
 
-// walks the two nested levels for every anime entry reachable from the root,
-// and notes the print works worth expanding a third level (see expandSources)
+// Walks three levels out from the root and returns bare ids -- the batch fetch
+// supplies the metadata. Print works come back separately: they are needed for
+// sourceMedia's title, but must never reach the slot/film/side-story passes,
+// which iterate every anime node.
 function collectIds(root) {
-	const ids = new Map([[root.id, root]]);
+	const ids = new Set([root.id]);
 	const sources = new Set();
 
 	const keep = (n) => {
 		if (!n) return;
 		// tie-in novels and spin-off manga are not entries in their own right,
-		// but films hang off them -- remember them to expand later
+		// but films hang off them
 		if (n.type === "MANGA") return void sources.add(n.id);
 		if (n.type !== "ANIME") return;
-		if (![...MAIN_FORMATS, ...SIDE_FORMATS].includes(n.format)) return;
-		if (!ids.has(n.id)) ids.set(n.id, n);
+		if (!SLOT_FORMATS.includes(n.format)) return;
+		ids.add(n.id);
 	};
 
 	for (const edge of root.relations?.edges ?? []) {
 		if (NOISE_RELATIONS.includes(edge.relationType)) continue;
 		keep(edge.node);
 		// the source manga/novel is the hub -- its relations are the franchise
-		for (const inner of edge.node.relations?.edges ?? []) {
+		for (const inner of edge.node?.relations?.edges ?? []) {
 			if (NOISE_RELATIONS.includes(inner.relationType)) continue;
 			keep(inner.node);
+
+			// My Hero Academia's four films are not children of the manga at
+			// all. Each has a light-novel tie-in hanging off the manga, and the
+			// film hangs off that:
+			//
+			//   manga -> SIDE_STORY -> "THE MOVIE: Futari no Hero" (NOVEL)
+			//         -> ADAPTATION -> film
+			//
+			// so a two-level walk finds the novel and stops. Descend only past
+			// a print work: an anime-to-anime edge at this depth is a sequel
+			// chain, which growSpine follows properly, and expanding it here
+			// would drag unrelated franchises in through crossovers.
+			if (inner.node?.type !== "MANGA") continue;
+			for (const deep of inner.node.relations?.edges ?? []) {
+				if (NOISE_RELATIONS.includes(deep.relationType)) continue;
+				keep(deep.node);
+			}
 		}
 	}
 	return { ids, sources };
 }
 
-// My Hero Academia's four films are not children of the manga at all. Each one
-// has a light-novel tie-in hanging off the manga, and the film hangs off that:
-//
-//   manga -> SIDE_STORY -> "THE MOVIE: Futari no Hero" (NOVEL) -> ADAPTATION -> film
-//
-// so a two-level walk finds the novel and stops. One more hop off the print
-// works picks the films up.
-async function expandSources(sourceIds, ids) {
-	const list = [...sourceIds];
-	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
-		const parts = list
-			.slice(i, i + RELATION_CHUNK)
-			.map(
-				(id, k) => `a${k}: Media(id: ${Number(id)}) {
-				id
-				relations { edges { relationType node { ${MEDIA_FIELDS} } } }
-			}`,
-			);
-		const data = await anilistQuery(`query Sources {${parts.join("\n")}}`);
-
-		for (const key of Object.keys(data ?? {})) {
-			for (const edge of data[key]?.relations?.edges ?? []) {
-				if (NOISE_RELATIONS.includes(edge.relationType)) continue;
-				const n = edge.node;
-				if (n?.type !== "ANIME") continue;
-				if (![...MAIN_FORMATS, ...SIDE_FORMATS].includes(n.format))
-					continue;
-				if (!ids.has(n.id)) ids.set(n.id, n);
-			}
-		}
-	}
-}
-
-// aliased calls get the mutual PREQUEL/SEQUEL/ALTERNATIVE edges
-const RELATION_CHUNK = 10;
-
-async function fetchRelations(ids) {
-	const list = [...ids];
-	const out = {};
-
-	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
-		const parts = list.slice(i, i + RELATION_CHUNK).map(
-			(id, k) => `a${k}: Media(id: ${Number(id)}) {
-				id
-				relations { edges { relationType node { id type format } } }
-			}`,
-		);
-		const data = await anilistQuery(`query Batch {${parts.join("\n")}}`);
-		for (const key of Object.keys(data ?? {})) {
-			const node = data[key];
-			if (node) out[node.id] = node;
-		}
-	}
-	return out;
-}
-
-// Full metadata plus edges, for entries discovered after the initial walk.
-async function fetchNodes(ids) {
-	const list = [...ids];
-	const out = {};
-	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
-		const parts = list
-			.slice(i, i + RELATION_CHUNK)
-			.map(
-				(id, k) => `a${k}: Media(id: ${Number(id)}) {
-				${MEDIA_FIELDS}
-				relations { edges { relationType node { id type format } } }
-			}`,
-			);
-		const data = await anilistQuery(`query Nodes {${parts.join("\n")}}`);
-		for (const key of Object.keys(data ?? {})) {
-			const node = data[key];
-			if (node) out[node.id] = node;
-		}
-	}
-	return out;
-}
-
-// Long-running franchises outrun the two-level walk. Every JoJo part adapts a
+// Long-running franchises outrun the initial walk. Every JoJo part adapts a
 // different manga, so Diamond is Unbreakable hangs off a volume the root has
 // never heard of -- discovery stopped at the Egypt arc and the show came back
 // with 3 of its 6 seasons. Follow the sequel chain outward instead, until it
 // stops turning up entries we have not already seen.
 const MAX_SPINE_ROUNDS = 6;
 
-async function growSpine(nodes, discovered) {
+async function growSpine(nodes) {
+	// ids AniList declined to return once will decline again -- without this a
+	// single deleted entry costs a fetch on every remaining round
+	const attempted = new Set(Object.keys(nodes).map(Number));
+
 	for (let round = 0; round < MAX_SPINE_ROUNDS; round++) {
 		const missing = new Set();
 		for (const id of Object.keys(nodes)) {
 			for (const edge of nodes[id]?.relations?.edges ?? []) {
-				if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+				if (!["SEQUEL", "PREQUEL"].includes(edge.relationType))
+					continue;
 				const n = edge.node;
 				// any anime format, not just the ones that can become slots:
 				// Hajime no Ippo runs 2000 series -> Champion Road (special)
 				// -> Mashiba vs Kimura (ova) -> New Challenger, so stopping at
 				// non-main formats cut the franchise in half.
-				//
-				// Nodes already known but without edges are queued too: only
-				// main formats get their relations fetched up front, so an
-				// interstitial special sits there as a dead end otherwise.
 				if (n?.type !== "ANIME") continue;
+				if (attempted.has(n.id)) continue;
 				if (!nodes[n.id]?.relations) missing.add(n.id);
 			}
 		}
 		if (!missing.size) return;
 
+		for (const id of missing) attempted.add(id);
 		const fetched = await fetchNodes(missing);
 		for (const node of Object.values(fetched)) {
-			nodes[node.id] = node;
-			discovered.set(node.id, node);
+			if (node.type === "ANIME") nodes[node.id] = node;
 		}
 	}
 }
 
-// ALTERNATIVE means "same story, different cut"
+// ALTERNATIVE covers two different things and only one of them should collapse.
+//
+//   FMA 2003 vs Brotherhood     6 years apart, 1224 vs 1536 min   -> two rows
+//   HxH 1999 vs 2011            12 years apart                    -> two rows
+//   Madoka TV vs the films      1 year apart, TV vs MOVIE         -> one slot
+//   a trimmed broadcast recut   same year, ~60% runtime            -> one slot
+//
+// A remake is a fresh production years later, and the user finds it by entering
+// its year -- it deserves its own show record with its own progress and score.
+// A recut ships alongside what it recuts and condenses it.
+const REMAKE_GAP_YEARS = 4;
+const RECUT_RUNTIME_RATIO = 0.6;
+
+function isSameProduction(a, b) {
+	if (!a || !b) return false;
+	const ya = a.startDate?.year;
+	const yb = b.startDate?.year;
+	// unknown date -> assume remake and keep them apart
+	if (!ya || !yb) return false;
+	if (Math.abs(ya - yb) > REMAKE_GAP_YEARS) return false;
+
+	// a film against an episodic run is the compilation case
+	if ((a.format === "MOVIE") !== (b.format === "MOVIE")) return true;
+
+	// close in time but comparable in scale is still two full productions
+	const [short, long] = [totalMinutes(a), totalMinutes(b)].sort(
+		(x, z) => x - z,
+	);
+	return long ? short / long <= RECUT_RUNTIME_RATIO : false;
+}
+
 function groupAlternatives(nodes, mainIds) {
 	const parent = new Map([...mainIds].map((id) => [id, id]));
 	const find = (x) => {
@@ -253,7 +344,9 @@ function groupAlternatives(nodes, mainIds) {
 	for (const id of mainIds) {
 		for (const edge of nodes[id]?.relations?.edges ?? []) {
 			if (edge.relationType !== "ALTERNATIVE") continue;
-			if (mainIds.has(edge.node.id)) union(id, edge.node.id);
+			if (!mainIds.has(edge.node.id)) continue;
+			if (!isSameProduction(nodes[id], nodes[edge.node.id])) continue;
+			union(id, edge.node.id);
 		}
 	}
 
@@ -266,7 +359,6 @@ function groupAlternatives(nodes, mainIds) {
 	return groups;
 }
 
-// orders the collapsed groups into a linear watch order by following SEQUEL edges
 // Which entries sit on the root's chain, walking PREQUEL/SEQUEL through every
 // anime node rather than only slot-eligible ones. A special sitting between two
 // seasons would otherwise cut the franchise in half.
@@ -312,15 +404,18 @@ function buildSpine(nodes, groups, rootGroup, reachable) {
 		}
 	}
 
+	// every multi-member group is now a production and its own recut, so the
+	// lead is the fullest cut -- a 12-episode run leads its 2-hour compilation
 	const primary = (g) => {
 		const members = groups
 			.get(g)
 			.map((id) => nodes[id])
 			.filter(Boolean);
-		// prefer the episodic cut -- usually newer
 		const tv = members.filter((m) => m.format !== "MOVIE");
-		return (tv.length ? tv : members).sort(
-			(a, z) => sortKey(a) - sortKey(z),
+		const pool = tv.length ? tv : members;
+		return [...pool].sort(
+			(a, z) =>
+				totalMinutes(z) - totalMinutes(a) || sortKey(a) - sortKey(z),
 		)[0];
 	};
 
@@ -354,7 +449,7 @@ function buildSpine(nodes, groups, rootGroup, reachable) {
 			cur = next.get(cur);
 		}
 	}
-	// belong in the order, by release date
+	// anything in the component the sequel chain never threaded, by release date
 	for (const g of [...connected].sort(
 		(a, z) => sortKey(primary(a)) - sortKey(primary(z)),
 	)) {
@@ -382,51 +477,14 @@ function numberFromTitle(title) {
 	return part ? `${season[1]}.${part[1]}` : season[1];
 }
 
-// zip ep counts
-function numberByZip(slots, tmdbSeasons) {
-	const episodic = slots.filter((s) => !s.isMovie);
-	if (!episodic.length || !tmdbSeasons?.length) return false;
+// Numbering is spine position now that TMDB's season list is gone. An explicit
+// season number in the title still wins, since AniList entry order does not
+// always agree with how a show numbers itself.
+function applyNumbers(slots) {
+	slots.forEach((slot, i) => {
+		slot.number = String(i + 1);
+	});
 
-	let i = 0;
-	for (const season of tmdbSeasons) {
-		const bucket = [];
-		let sum = 0;
-		while (i < episodic.length && sum < season.episode_count) {
-			if (episodic[i].episodes == null) return false;
-			sum += episodic[i].episodes;
-			bucket.push(episodic[i]);
-			i++;
-		}
-		if (sum !== season.episode_count || !bucket.length) return false;
-		bucket.forEach((slot, k) => {
-			slot.number =
-				bucket.length > 1
-					? `${season.season_number}.${k + 1}`
-					: `${season.season_number}`;
-			// AniList art wins: it is per-entry, so split cours stay visually
-			// distinct where a tmdb season poster would be shared between 3.1
-			// and 3.2. It is textless, which the ui covers by overlaying the
-			// show logo. tmdb is the fallback and stays available as an
-			// alternative. The zip is the only thing that knows which tmdb
-			// season a slot belongs to, so the mapping rides along with it.
-			slot.tmdbPosterUrl = season.posterUrl ?? null;
-			if (!slot.posterUrl) slot.posterUrl = season.posterUrl ?? null;
-		});
-	}
-	// unreleased entries have no TMDB counterpart -- number them off the end
-	let trailing = tmdbSeasons.length;
-	for (; i < episodic.length; i++) episodic[i].number = String(++trailing);
-	return true;
-}
-
-function applyNumbers(slots, tmdbSeasons) {
-	const zipped = numberByZip(slots, tmdbSeasons);
-	if (!zipped) {
-		let n = 0;
-		for (const slot of slots) if (!slot.isMovie) slot.number = String(++n);
-	}
-
-	// an explicit season number in the title beats the zip
 	const base = (n) => String(n ?? "").split(".")[0];
 	for (const slot of slots) {
 		const fromTitle = numberFromTitle(slot.label);
@@ -439,8 +497,8 @@ function applyNumbers(slots, tmdbSeasons) {
 	// "3.1" with no sibling "3.2" is just "3"
 	const counts = new Map();
 	for (const slot of slots) {
-		const base = slot.number?.split(".")[0];
-		if (base) counts.set(base, (counts.get(base) ?? 0) + 1);
+		const b = slot.number?.split(".")[0];
+		if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
 	}
 	for (const slot of slots) {
 		if (
@@ -452,44 +510,38 @@ function applyNumbers(slots, tmdbSeasons) {
 	}
 }
 
-export async function buildAnimeChain({
-	nativeTitle,
-	fallbackTitle,
-	year,
-	tmdbSeasons,
-}) {
+async function buildChain({ nativeTitle, fallbackTitle, year }) {
 	const root = await resolveRoot(nativeTitle, fallbackTitle, year);
 	if (!root) return null;
 
-	const { ids: discovered, sources } = collectIds(root);
-	if (sources.size) await expandSources(sources, discovered);
+	// One batch covers the entire discovered graph -- relations included, so
+	// there is no separate pass for edges and none for the print works films
+	// hang off.
+	const { ids, sources } = collectIds(root);
+	const fetched = await fetchNodes([...ids, ...sources]);
 
-	// only main-format entries can enter the spine
+	const nodes = {};
+	const prints = {};
+	for (const node of Object.values(fetched)) {
+		if (node.type === "ANIME") nodes[node.id] = node;
+		else prints[node.id] = node;
+	}
+	// if AniList did not return the root, fall back to the resolve payload
+	nodes[root.id] ??= root;
+
+	await growSpine(nodes);
+
+	// Only main-format entries can enter the spine. This runs after the batch
+	// because isShortForm needs the episode count, which discovery does not
+	// carry.
 	const isShortForm = (n) => n.format === "ONA" && n.episodes === 1;
 
 	const mainIds = new Set(
-		[...discovered.values()]
+		Object.values(nodes)
 			.filter((n) => MAIN_FORMATS.includes(n.format) && !isShortForm(n))
 			.map((n) => n.id),
 	);
 	mainIds.add(root.id);
-
-	const edges = await fetchRelations(mainIds);
-	const nodes = {};
-	for (const [id, node] of discovered) {
-		nodes[id] = {
-			...node,
-			relations: edges[id]?.relations ?? node.relations,
-		};
-	}
-	await growSpine(nodes, discovered);
-
-	// growSpine can add entries the first pass never saw, so the main set has
-	// to be taken again rather than reused from above
-	for (const node of Object.values(nodes)) {
-		if (MAIN_FORMATS.includes(node.format) && !isShortForm(node))
-			mainIds.add(node.id);
-	}
 
 	const groups = groupAlternatives(nodes, mainIds);
 	const rootGroup = [...groups.keys()].find((g) =>
@@ -503,45 +555,29 @@ export async function buildAnimeChain({
 		reachable,
 	);
 
-	const slots = ordered.map((group, index) => {
+	const slots = ordered.map((group) => {
 		const lead = primary(group);
 		const others = groups
 			.get(group)
 			.filter((id) => id !== lead.id)
-			.map((id) => shape(nodes[id]));
-		return {
-			// slots are a superset of the tmdb season shape on purpose
-			season_number: index + 1,
-			episode_count: lead.episodes ?? 0,
-			...shape(lead),
-			number: null,
-			variants: others,
-		};
+			.map((id) => ({
+				...shape(nodes[id]),
+				variantKind: "alternate_cut",
+			}));
+		return { ...shape(lead), number: null, position: 0, variants: others };
 	});
-	applyNumbers(slots, tmdbSeasons);
 
-	// the manga/novel the anime adapts
-	const sourceEdges = (root.relations?.edges ?? []).filter(
-		(e) => e.relationType === "ADAPTATION" && e.node.type === "MANGA",
+	// the manga/novel the anime adapts. The edge is skinny now, so the title
+	// comes from the batched print record.
+	const sourceEdges = (nodes[root.id]?.relations?.edges ?? []).filter(
+		(e) => e.relationType === "ADAPTATION" && e.node?.type === "MANGA",
 	);
 	const sourceEdge =
 		sourceEdges.find((e) => e.node.format === "MANGA") ?? sourceEdges[0];
-
-	// ovas/specials plus anything that never joined the root's chain -- recap
-	// films, non-canon movies, spin-off shorts.
-	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
-
-	// A feature-length special is a film in everything but AniList's label.
-	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
-	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
-	// the two recap films surfaced while the ending did not. Runtime is what
-	// separates these from the 20-minute shorts that belong in side stories.
-	const FEATURE_MINUTES = 45;
-	const isFeature = (n) =>
-		n?.format === "MOVIE" ||
-		(["SPECIAL", "OVA"].includes(n?.format) &&
-			(n?.duration ?? 0) >= FEATURE_MINUTES &&
-			(n?.episodes ?? 1) <= 1);
+	const sourceNode = sourceEdge
+		? (prints[sourceEdge.node.id] ?? sourceEdge.node)
+		: null;
+	const sourceId = sourceEdge?.node?.id;
 
 	// A recap compiles episodes rather than telling its own story, so it hangs
 	// off the seasons it covers (PARENT) and adapts nothing. An original film
@@ -549,11 +585,10 @@ export async function buildAnimeChain({
 	// and those also carry PARENT to mark the season they sit alongside, so
 	// PARENT on its own is not the signal. Having no source is.
 	//
-	//   ~Chronicle~        PARENT x4, no adaptation        -> recap
-	//   Roar of Awakening  PARENT -> S2, no adaptation     -> recap
+	//   ~Chronicle~        PARENT x4, no adaptation          -> recap
+	//   Roar of Awakening  PARENT -> S2, no adaptation       -> recap
 	//   Two Heroes         PARENT -> S3, ADAPTATION -> novel -> keep
-	//   Infinity Castle    no PARENT at all                -> keep
-	const sourceId = sourceEdge?.node?.id;
+	//   Infinity Castle    no PARENT at all                  -> keep
 	const isRecap = (n) => {
 		const edges = n?.relations?.edges ?? [];
 		const compiles = edges.some(
@@ -574,8 +609,59 @@ export async function buildAnimeChain({
 
 	// Films leave the slot array entirely. A film is watched in one sitting and
 	// scored in the movies list, so it is not a position the episode stepper
-	// should ever land on -- it is a pointer that says "this comes next, open
-	// it over there". Slots stay purely episodic.
+	// should ever land on -- it is a pointer that says "this comes next, open it
+	// over there". Slots stay purely episodic.
+	const movieSlots = slots.filter((s) => s.isMovie);
+	const episodic = slots.filter((s) => !s.isMovie);
+	slots.length = 0;
+	slots.push(...episodic);
+	applyNumbers(slots);
+	slots.forEach((s, i) => {
+		s.position = i + 1;
+	});
+
+	// A feature-length special is a film in everything but AniList's label.
+	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
+	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
+	// the two recap films surfaced while the ending did not. Runtime is what
+	// separates these from the 20-minute shorts that belong in side stories.
+	const FEATURE_MINUTES = 45;
+	const isFeature = (n) =>
+		n?.format === "MOVIE" ||
+		(["SPECIAL", "OVA"].includes(n?.format) &&
+			(n?.duration ?? 0) >= FEATURE_MINUTES &&
+			(n?.episodes ?? 1) <= 1);
+
+	// A recap of one specific season belongs to that season -- it is an
+	// alternate way to watch it. A retrospective spanning four seasons belongs
+	// to the franchise and stays in side stories.
+	const slotById = new Map(slots.map((s) => [s.anilistId, s]));
+	const attached = new Set();
+
+	for (const node of Object.values(nodes)) {
+		if (slotById.has(node.id) || !isRecap(node)) continue;
+		const parents = [
+			...new Set(
+				(node.relations?.edges ?? [])
+					.filter(
+						(e) =>
+							e.relationType === "PARENT" &&
+							e.node?.type === "ANIME",
+					)
+					.map((e) => e.node.id),
+			),
+		].filter((id) => slotById.has(id));
+		if (parents.length !== 1) continue;
+
+		slotById.get(parents[0]).variants.push({
+			...shape(node),
+			variantKind: node.format === "MOVIE" ? "compilation_film" : "recap",
+		});
+		attached.add(node.id);
+	}
+
+	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
+
 	const filmNodes = [
 		...Object.values(nodes).filter(
 			(n) => isFeature(n) && n.format !== "MOVIE",
@@ -583,86 +669,115 @@ export async function buildAnimeChain({
 		...[...orphanIds]
 			.map((id) => nodes[id])
 			.filter((n) => n?.format === "MOVIE"),
-		...slots.filter((s) => s.isMovie),
-	].filter((n) => !isRecap(nodes[n.anilistId ?? n.id] ?? n));
+		...movieSlots,
+	].filter((n) => {
+		const id = n.anilistId ?? n.id;
+		if (attached.has(id)) return false;
+		return !isRecap(nodes[id] ?? n);
+	});
 	const filmIds = new Set(filmNodes.map((f) => f.anilistId ?? f.id));
 	for (const id of filmIds) orphanIds.delete(id);
 
-	const episodic = slots.filter((s) => !s.isMovie);
-	slots.length = 0;
-	slots.push(...episodic);
-	// season_number is the tmdb-shaped fallback -- keep it a real position
-	slots.forEach((s, i) => (s.season_number = i + 1));
-
-	// anchored to the slot they aired after
+	// anchored to the slot they aired after, by id -- position is recomputed on
+	// every rebuild and must never be persisted as a reference
 	const anchors = slots
 		.filter((s) => s.startDate)
-		.map((s) => ({
-			afterSlot: s.number,
-			afterSlotAnilistId: s.anilistId,
-			date: s.startDate,
-		}))
+		.map((s) => ({ afterSlotAnilistId: s.anilistId, date: s.startDate }))
 		.sort((a, z) => a.date.localeCompare(z.date));
 
-	const anchorFor = (node) => {
-		const date = asDate(node);
-		if (!date) return { afterSlot: null, afterSlotAnilistId: null };
+	const anchorFor = (date) => {
+		if (!date) return { afterSlotAnilistId: null };
 		let hit = null;
 		for (const a of anchors) if (a.date <= date) hit = a;
-		return {
-			afterSlot: hit?.afterSlot ?? null,
-			afterSlotAnilistId: hit?.afterSlotAnilistId ?? null,
-		};
+		return { afterSlotAnilistId: hit?.afterSlotAnilistId ?? null };
 	};
 
 	const sideStories = Object.values(nodes)
 		.filter(
 			(n) =>
 				!filmIds.has(n.id) &&
+				!attached.has(n.id) &&
 				(SIDE_FORMATS.includes(n.format) || orphanIds.has(n.id)),
 		)
 		.sort((a, z) => sortKey(a) - sortKey(z))
-		.map((n) => ({ ...shape(n), ...anchorFor(n) }));
+		.map((n) => ({ ...shape(n), ...anchorFor(fuzzy(n.startDate)) }));
 
-	// each film records the season it follows, so the ui can offer it at that
-	// transition rather than parking it in the middle of the episode chain
 	const films = filmNodes
 		.map((n) => (n.anilistId ? n : shape(n)))
-		.sort((a, z) => (a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"))
+		.sort((a, z) =>
+			(a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"),
+		)
 		.map((film) => ({
 			anilistId: film.anilistId,
 			label: film.label,
 			duration: film.duration ?? null,
 			startDate: film.startDate ?? null,
-			averageScore: film.averageScore ?? null,
+			status: film.status ?? null,
+			studio: film.studio ?? null,
 			posterUrl: film.posterUrl ?? null,
 			posterColor: film.posterColor ?? null,
-			...(() => {
-				const date = film.startDate;
-				if (!date) return { afterSlot: null, afterSlotAnilistId: null };
-				let hit = null;
-				for (const a of anchors) if (a.date <= date) hit = a;
-				return {
-					afterSlot: hit?.afterSlot ?? null,
-					afterSlotAnilistId: hit?.afterSlotAnilistId ?? null,
-				};
-			})(),
+			...anchorFor(film.startDate),
 		}));
 
 	return {
 		anilistId: root.id,
 		titleRomaji: root.title?.romaji ?? null,
 		titleNative: root.title?.native ?? null,
-		communityScore: root.averageScore ?? null,
-		sourceMedia: sourceEdge
+		studio: mainStudio(nodes[root.id] ?? root),
+		sourceMedia: sourceNode
 			? {
-					anilistId: sourceEdge.node.id,
-					format: sourceEdge.node.format,
-					label: label(sourceEdge.node),
+					anilistId: sourceNode.id,
+					format: sourceNode.format,
+					label: label(sourceNode),
 				}
 			: null,
 		slots,
 		films,
 		sideStories,
 	};
+}
+
+// A finished show's relation graph does not move week to week, so a whole
+// assembled chain is cacheable far longer than the nodes it was built from.
+// This is the optimisation that matters: a repeat open of the same show costs
+// zero AniList calls rather than two to four.
+//
+// In-process only. Multiple workers means a cold cache per worker and a restart
+// drops everything -- move this and anilistClient's query cache to Redis if you
+// run more than one instance.
+const CHAIN_TTL = 7 * 24 * 60 * 60 * 1000;
+const CHAIN_CACHE_MAX = 300;
+const chainCache = new Map();
+
+export async function buildAnimeChain({
+	nativeTitle,
+	fallbackTitle,
+	year,
+	forceRefresh = false,
+}) {
+	const key = JSON.stringify([
+		nativeTitle ?? null,
+		fallbackTitle ?? null,
+		year ?? null,
+	]);
+	const hit = chainCache.get(key);
+	if (!forceRefresh && hit && hit.expires > Date.now()) {
+		// cloned: callers destructure and reassign, and one of them mutating a
+		// shared slot array would corrupt every later read
+		return structuredClone(hit.chain);
+	}
+
+	const chain = await buildChain({ nativeTitle, fallbackTitle, year });
+	if (!chain) return null;
+
+	// lets the caller decide when a stored chain is stale enough to rebuild
+	chain.chainFetchedAt = new Date().toISOString();
+	chainCache.set(key, { chain, expires: Date.now() + CHAIN_TTL });
+
+	if (chainCache.size > CHAIN_CACHE_MAX) {
+		const now = Date.now();
+		for (const [k, v] of chainCache)
+			if (v.expires <= now) chainCache.delete(k);
+	}
+	return structuredClone(chain);
 }
