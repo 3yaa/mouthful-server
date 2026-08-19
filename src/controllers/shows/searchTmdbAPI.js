@@ -3,53 +3,13 @@ import { checkDuplicate } from "../utils/checkDuplicate.js";
 
 dotenv.config();
 
-// "Steins;Gate" and "steins gate" compare equal
-const normalise = (s) =>
-	(s ?? "")
-		.toLowerCase()
-		.replace(/[^a-z0-9\u3000-\u30ff\u4e00-\u9fff]+/g, "");
-
-// TMDB ranks an exact name match first no matter how dead the record is, and
-// anime carry a romaji title that often belongs to a stub rather than to the
-// series anyone means. Searching "Arslan Senki" put a 1995 entry with no
-// poster and a popularity of 0.8 ahead of the 2015 series everybody wants.
-//
-// Order of business:
-//   1. a record with no poster is a stub -- drop it unless that is all there is
-//   2. an exact title match, on either the display or the original title
-//   3. popularity, which separates a main series from its spin-offs
-export function pickBestMatch(results, query) {
-	if (!results?.length) return null;
-
-	const withArt = results.filter((r) => r.poster_path);
-	const pool = withArt.length ? withArt : results;
-
-	const wanted = normalise(query);
-	const rank = (r) => {
-		const names = [r.name, r.original_name].map(normalise);
-		if (names.includes(wanted)) return 0;
-		if (names.some((n) => n && (n.startsWith(wanted) || wanted.startsWith(n))))
-			return 1;
-		return 2;
-	};
-
-	return [...pool].sort(
-		(a, b) => rank(a) - rank(b) || (b.popularity ?? 0) - (a.popularity ?? 0),
-	)[0];
-}
-
 export async function useTmdbSearchAPI(req, res) {
   try {
     const userId = req.user.id;
     const { title, year } = req.query;
-    // an absent year arrived as the string "undefined" and rode along in the
-    // query, which is harmless today only because tmdb ignores what it cannot
-    // parse
-    const hasYear = year && year !== "undefined" && !Number.isNaN(Number(year));
-    const url =
-      `https://api.themoviedb.org/3/search/tv?api_key=${process.env.TMDB_API_KEY}` +
-      `&query=${encodeURIComponent(title)}` +
-      (hasYear ? `&first_air_date_year=${Number(year)}` : "");
+    const url = `https://api.themoviedb.org/3/search/tv?api_key=${
+      process.env.TMDB_API_KEY
+    }&query=${encodeURIComponent(title)}&first_air_date_year=${year}`;
     // make call
     const response = await fetch(url);
     if (!response.ok) {
@@ -61,7 +21,7 @@ export async function useTmdbSearchAPI(req, res) {
     }
     // check if valid
     const data = await response.json();
-    const show = pickBestMatch(data.results, title) || {};
+    const show = data.results[0] || {};
     // data clean up
     const processedShow = {
       tmdbId: show.id,

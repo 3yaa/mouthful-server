@@ -64,7 +64,6 @@ export async function useTmdbTvAPI(req, res) {
 		if (wantsAnime) {
 			try {
 				const chain = await buildAnimeChain({
-					tmdbId,
 					nativeTitle: show.original_name,
 					fallbackTitle: show.name,
 					year:
@@ -87,8 +86,8 @@ export async function useTmdbTvAPI(req, res) {
 					}
 				}
 			} catch (e) {
-				// enrichment only -- a bad resolve must not sink the tmdb result
-				console.error("Anime chain failed: ", e.message);
+				// enrichment only -- a bad anilist call must not sink the tmdb result
+				console.error("AniList chain failed: ", e.message);
 			}
 		}
 		//

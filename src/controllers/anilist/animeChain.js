@@ -1,18 +1,17 @@
 import { anilistQuery, titleMatches } from "./anilistClient.js";
-import {
-	anilistIdOf,
-	aodEntry,
-	relatedKeys,
-	tmdbRows,
-} from "./animeIndex.js";
-import { overridesFor } from "./animeOverrides.js";
 
 // TMDB's own "anime" keyword
 const TMDB_ANIME_KEYWORD = 210024;
 const TMDB_ANIMATION_GENRE = 16;
 const ANIME_ORIGINS = ["JP", "CN", "KR", "TW"];
 
-// genre+origin
+// donghua are almost always ONA
+const MAIN_FORMATS = ["TV", "ONA", "MOVIE"];
+// promo shorts, tie-ins and recaps -- delete
+const NOISE_RELATIONS = ["CHARACTER", "OTHER", "SPIN_OFF", "SUMMARY"];
+const SIDE_FORMATS = ["OVA", "SPECIAL", "TV_SHORT"];
+
+// genre+origi
 export function isAnime(tmdbDetail) {
 	const genres = (tmdbDetail?.genres ?? []).map((g) => g.id);
 	const keywords = (tmdbDetail?.keywords?.results ?? []).map((k) => k.id);
@@ -25,75 +24,55 @@ export function isAnime(tmdbDetail) {
 	);
 }
 
-// A special this long is a film in everything but its label. Attack on Titan's
-// actual finale was never entered as a MOVIE anywhere -- it exists only as
-// "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes.
-const FEATURE_MINUTES = 45;
+const MEDIA_FIELDS = `
+	id type format episodes duration averageScore
+	title { romaji english native }
+	startDate { year month }
+	coverImage { extraLarge color }
+`;
 
-// AOD dates anime to a quarter, not a month. The ui only ever reads the year
-// off these, so a representative month keeps the string sortable and the
-// display exact.
-const SEASON_MONTH = { WINTER: "01", SPRING: "04", SUMMER: "07", FALL: "10" };
-const SEASON_ORDER = { WINTER: 0, SPRING: 1, SUMMER: 2, FALL: 3 };
-
-const startDateOf = (entry) =>
-	entry?.y ? `${entry.y}-${SEASON_MONTH[entry.q] ?? "01"}` : null;
-
-const chronoKey = (entry) =>
-	(entry?.y ?? 9999) * 4 + (SEASON_ORDER[entry?.q] ?? 0);
-
-// Runtime decides, not the label. AniList files 7-minute promos and 5-minute
-// stings as MOVIE, and they are not things to send someone off to watch; the
-// same threshold rescues feature-length entries filed as SPECIAL.
-const isFeature = (entry) => {
-	if (!["MOVIE", "SPECIAL", "OVA"].includes(entry?.k)) return false;
-	if ((entry.e ?? 1) > 1) return false;
-	return entry.d == null ? entry.k === "MOVIE" : entry.d >= FEATURE_MINUTES;
-};
-
-// AniList scores 0-100, AOD 1-10. Everything downstream was written against
-// the AniList scale.
-const scoreOf = (entry) =>
-	entry?.c == null ? null : Math.round(entry.c * 10);
-
-// --- the live exception path ------------------------------------------------
-// The index is a weekly snapshot, so anything still airing has a stale episode
-// count and status. One batched call patches those, and nothing else.
-
-const LIVE = `query Live($ids: [Int]) {
-	Page(perPage: 50) {
-		media(id_in: $ids, type: ANIME) {
-			id episodes status
-			title { english romaji }
-			coverImage { extraLarge color }
-		}
-	}
-}`;
-
-async function fetchLive(ids) {
-	const live = new Map();
-	for (let i = 0; i < ids.length; i += 50) {
-		const data = await anilistQuery(LIVE, { ids: ids.slice(i, i + 50) });
-		for (const media of data?.Page?.media ?? []) live.set(media.id, media);
-	}
-	return live;
-}
-
+//
 const RESOLVE = `query Resolve($search: String!, $year: Int) {
 	Page(perPage: 1) {
 		media(type: ANIME, search: $search, seasonYear: $year, sort: SEARCH_MATCH) {
-			id
-			title { romaji english native }
-			coverImage { extraLarge color }
+			${MEDIA_FIELDS}
+			relations { edges { relationType node {
+				${MEDIA_FIELDS}
+				relations { edges { relationType node { ${MEDIA_FIELDS} } } }
+			} } }
 		}
 	}
 }`;
 
-// Only for shows the tmdb mapping has never heard of -- about one in twenty,
-// and skewed towards donghua, adult titles and releases from the last month.
-// There is no season data to be had, so this claims the row as anime and
-// upgrades the artwork, leaving tmdb's own seasons in place.
-async function resolveUnmapped({ nativeTitle, fallbackTitle, year, tmdbSeasons }) {
+const sortKey = (n) =>
+	(n.startDate?.year ?? 9999) * 100 + (n.startDate?.month ?? 1);
+
+const asDate = (n) =>
+	n.startDate?.year
+		? `${n.startDate.year}-${String(n.startDate.month ?? 1).padStart(2, "0")}`
+		: null;
+
+const label = (n) => n.title?.english ?? n.title?.romaji ?? n.title?.native;
+
+function shape(n) {
+	return {
+		anilistId: n.id,
+		label: label(n),
+		format: n.format,
+		isMovie: n.format === "MOVIE",
+		episodes: n.episodes ?? null,
+		duration: n.duration ?? null,
+		startDate: asDate(n),
+		averageScore: n.averageScore ?? null,
+		posterUrl: n.coverImage?.extraLarge ?? null,
+		// kept even when a tmdb season poster wins, so the picker can offer it
+		anilistPosterUrl: n.coverImage?.extraLarge ?? null,
+		posterColor: n.coverImage?.color ?? null,
+	};
+}
+
+// resolves the entry the user actually searched for
+async function resolveRoot(nativeTitle, fallbackTitle, year) {
 	for (const [search, seasonYear] of [
 		[nativeTitle, year],
 		[nativeTitle, null],
@@ -109,32 +88,288 @@ async function resolveUnmapped({ nativeTitle, fallbackTitle, year, tmdbSeasons }
 			media.title?.english,
 			media.title?.native,
 		];
-		if (!titleMatches(search, titles)) continue;
-
-		const cover = media.coverImage?.extraLarge ?? null;
-		return {
-			anilistId: media.id,
-			titleRomaji: media.title?.romaji ?? null,
-			slots: (tmdbSeasons ?? []).map((season, index) => ({
-				uid: null,
-				anilistId: media.id,
-				season_number: season.season_number,
-				episode_count: season.episode_count,
-				label: null,
-				number: String(season.season_number),
-				episodes: season.episode_count,
-				startDate: null,
-				posterUrl: season.posterUrl ?? (index === 0 ? cover : null),
-				posterColor: media.coverImage?.color ?? null,
-			})),
-			films: [],
-			sideStories: [],
-		};
+		if (titleMatches(search, titles)) return media;
 	}
 	return null;
 }
 
-// --- numbering --------------------------------------------------------------
+// walks the two nested levels for every anime entry reachable from the root,
+// and notes the print works worth expanding a third level (see expandSources)
+function collectIds(root) {
+	const ids = new Map([[root.id, root]]);
+	const sources = new Set();
+
+	const keep = (n) => {
+		if (!n) return;
+		// tie-in novels and spin-off manga are not entries in their own right,
+		// but films hang off them -- remember them to expand later
+		if (n.type === "MANGA") return void sources.add(n.id);
+		if (n.type !== "ANIME") return;
+		if (![...MAIN_FORMATS, ...SIDE_FORMATS].includes(n.format)) return;
+		if (!ids.has(n.id)) ids.set(n.id, n);
+	};
+
+	for (const edge of root.relations?.edges ?? []) {
+		if (NOISE_RELATIONS.includes(edge.relationType)) continue;
+		keep(edge.node);
+		// the source manga/novel is the hub -- its relations are the franchise
+		for (const inner of edge.node.relations?.edges ?? []) {
+			if (NOISE_RELATIONS.includes(inner.relationType)) continue;
+			keep(inner.node);
+		}
+	}
+	return { ids, sources };
+}
+
+// My Hero Academia's four films are not children of the manga at all. Each one
+// has a light-novel tie-in hanging off the manga, and the film hangs off that:
+//
+//   manga -> SIDE_STORY -> "THE MOVIE: Futari no Hero" (NOVEL) -> ADAPTATION -> film
+//
+// so a two-level walk finds the novel and stops. One more hop off the print
+// works picks the films up.
+async function expandSources(sourceIds, ids) {
+	const list = [...sourceIds];
+	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
+		const parts = list
+			.slice(i, i + RELATION_CHUNK)
+			.map(
+				(id, k) => `a${k}: Media(id: ${Number(id)}) {
+				id
+				relations { edges { relationType node { ${MEDIA_FIELDS} } } }
+			}`,
+			);
+		const data = await anilistQuery(`query Sources {${parts.join("\n")}}`);
+
+		for (const key of Object.keys(data ?? {})) {
+			for (const edge of data[key]?.relations?.edges ?? []) {
+				if (NOISE_RELATIONS.includes(edge.relationType)) continue;
+				const n = edge.node;
+				if (n?.type !== "ANIME") continue;
+				if (![...MAIN_FORMATS, ...SIDE_FORMATS].includes(n.format))
+					continue;
+				if (!ids.has(n.id)) ids.set(n.id, n);
+			}
+		}
+	}
+}
+
+// aliased calls get the mutual PREQUEL/SEQUEL/ALTERNATIVE edges
+const RELATION_CHUNK = 10;
+
+async function fetchRelations(ids) {
+	const list = [...ids];
+	const out = {};
+
+	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
+		const parts = list.slice(i, i + RELATION_CHUNK).map(
+			(id, k) => `a${k}: Media(id: ${Number(id)}) {
+				id
+				relations { edges { relationType node { id type format } } }
+			}`,
+		);
+		const data = await anilistQuery(`query Batch {${parts.join("\n")}}`);
+		for (const key of Object.keys(data ?? {})) {
+			const node = data[key];
+			if (node) out[node.id] = node;
+		}
+	}
+	return out;
+}
+
+// Full metadata plus edges, for entries discovered after the initial walk.
+async function fetchNodes(ids) {
+	const list = [...ids];
+	const out = {};
+	for (let i = 0; i < list.length; i += RELATION_CHUNK) {
+		const parts = list
+			.slice(i, i + RELATION_CHUNK)
+			.map(
+				(id, k) => `a${k}: Media(id: ${Number(id)}) {
+				${MEDIA_FIELDS}
+				relations { edges { relationType node { id type format } } }
+			}`,
+			);
+		const data = await anilistQuery(`query Nodes {${parts.join("\n")}}`);
+		for (const key of Object.keys(data ?? {})) {
+			const node = data[key];
+			if (node) out[node.id] = node;
+		}
+	}
+	return out;
+}
+
+// Long-running franchises outrun the two-level walk. Every JoJo part adapts a
+// different manga, so Diamond is Unbreakable hangs off a volume the root has
+// never heard of -- discovery stopped at the Egypt arc and the show came back
+// with 3 of its 6 seasons. Follow the sequel chain outward instead, until it
+// stops turning up entries we have not already seen.
+const MAX_SPINE_ROUNDS = 6;
+
+async function growSpine(nodes, discovered) {
+	for (let round = 0; round < MAX_SPINE_ROUNDS; round++) {
+		const missing = new Set();
+		for (const id of Object.keys(nodes)) {
+			for (const edge of nodes[id]?.relations?.edges ?? []) {
+				if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+				const n = edge.node;
+				// any anime format, not just the ones that can become slots:
+				// Hajime no Ippo runs 2000 series -> Champion Road (special)
+				// -> Mashiba vs Kimura (ova) -> New Challenger, so stopping at
+				// non-main formats cut the franchise in half.
+				//
+				// Nodes already known but without edges are queued too: only
+				// main formats get their relations fetched up front, so an
+				// interstitial special sits there as a dead end otherwise.
+				if (n?.type !== "ANIME") continue;
+				if (!nodes[n.id]?.relations) missing.add(n.id);
+			}
+		}
+		if (!missing.size) return;
+
+		const fetched = await fetchNodes(missing);
+		for (const node of Object.values(fetched)) {
+			nodes[node.id] = node;
+			discovered.set(node.id, node);
+		}
+	}
+}
+
+// ALTERNATIVE means "same story, different cut"
+function groupAlternatives(nodes, mainIds) {
+	const parent = new Map([...mainIds].map((id) => [id, id]));
+	const find = (x) => {
+		while (parent.get(x) !== x) {
+			parent.set(x, parent.get(parent.get(x)));
+			x = parent.get(x);
+		}
+		return x;
+	};
+	const union = (a, b) => {
+		const [ra, rb] = [find(a), find(b)];
+		if (ra !== rb) parent.set(rb, ra);
+	};
+
+	for (const id of mainIds) {
+		for (const edge of nodes[id]?.relations?.edges ?? []) {
+			if (edge.relationType !== "ALTERNATIVE") continue;
+			if (mainIds.has(edge.node.id)) union(id, edge.node.id);
+		}
+	}
+
+	const groups = new Map();
+	for (const id of mainIds) {
+		const root = find(id);
+		if (!groups.has(root)) groups.set(root, []);
+		groups.get(root).push(id);
+	}
+	return groups;
+}
+
+// orders the collapsed groups into a linear watch order by following SEQUEL edges
+// Which entries sit on the root's chain, walking PREQUEL/SEQUEL through every
+// anime node rather than only slot-eligible ones. A special sitting between two
+// seasons would otherwise cut the franchise in half.
+function reachableFrom(nodes, rootId) {
+	const seen = new Set([rootId]);
+	const stack = [rootId];
+	while (stack.length) {
+		for (const edge of nodes[stack.pop()]?.relations?.edges ?? []) {
+			if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+			const n = edge.node;
+			if (n?.type !== "ANIME" || seen.has(n.id) || !nodes[n.id]) continue;
+			seen.add(n.id);
+			stack.push(n.id);
+		}
+	}
+	return seen;
+}
+
+function buildSpine(nodes, groups, rootGroup, reachable) {
+	const groupOf = new Map();
+	for (const [root, members] of groups)
+		for (const id of members) groupOf.set(id, root);
+
+	const next = new Map();
+	const indegree = new Map([...groups.keys()].map((g) => [g, 0]));
+	const neighbours = new Map([...groups.keys()].map((g) => [g, new Set()]));
+
+	for (const [root, members] of groups) {
+		for (const id of members) {
+			for (const edge of nodes[id]?.relations?.edges ?? []) {
+				if (!["SEQUEL", "PREQUEL"].includes(edge.relationType))
+					continue;
+				const target = groupOf.get(edge.node.id);
+				if (target === undefined || target === root) continue;
+
+				neighbours.get(root).add(target);
+				neighbours.get(target).add(root);
+				if (edge.relationType === "SEQUEL" && !next.has(root)) {
+					next.set(root, target);
+					indegree.set(target, (indegree.get(target) ?? 0) + 1);
+				}
+			}
+		}
+	}
+
+	const primary = (g) => {
+		const members = groups
+			.get(g)
+			.map((id) => nodes[id])
+			.filter(Boolean);
+		// prefer the episodic cut -- usually newer
+		const tv = members.filter((m) => m.format !== "MOVIE");
+		return (tv.length ? tv : members).sort(
+			(a, z) => sortKey(a) - sortKey(z),
+		)[0];
+	};
+
+	// the root's connected component, seeded with everything the wider walk
+	// reached so a chain that runs through a special still counts as one
+	const connected = new Set([rootGroup]);
+	for (const [group, members] of groups)
+		if (members.some((id) => reachable.has(id))) connected.add(group);
+
+	const stack = [...connected];
+	while (stack.length) {
+		for (const n of neighbours.get(stack.pop()) ?? []) {
+			if (!connected.has(n)) {
+				connected.add(n);
+				stack.push(n);
+			}
+		}
+	}
+
+	const starts = [...connected]
+		.filter((g) => (indegree.get(g) ?? 0) === 0)
+		.sort((a, z) => sortKey(primary(a)) - sortKey(primary(z)));
+
+	const ordered = [];
+	const seen = new Set();
+	for (const start of starts) {
+		let cur = start;
+		while (cur !== undefined && !seen.has(cur)) {
+			seen.add(cur);
+			ordered.push(cur);
+			cur = next.get(cur);
+		}
+	}
+	// belong in the order, by release date
+	for (const g of [...connected].sort(
+		(a, z) => sortKey(primary(a)) - sortKey(primary(z)),
+	)) {
+		if (!seen.has(g)) {
+			seen.add(g);
+			ordered.push(g);
+		}
+	}
+
+	const orphans = [...groups.keys()]
+		.filter((g) => !connected.has(g))
+		.sort((a, z) => sortKey(primary(a)) - sortKey(primary(z)));
+
+	return { ordered, orphans, primary };
+}
 
 // "Shingeki no Kyojin Season 3 Part 2" -> "3.2", "Sousou no Frieren 2nd Season" -> "2"
 function numberFromTitle(title) {
@@ -147,268 +382,286 @@ function numberFromTitle(title) {
 	return part ? `${season[1]}.${part[1]}` : season[1];
 }
 
-// The tmdb season a row maps to is authoritative, so numbering is a walk down
-// the chain rather than the episode-count zip the previous pass had to guess
-// with. A new number starts when the tmdb season changes or the title declares
-// one; anything else continues the season it follows as the next part.
-function applyNumbers(slots) {
-	let base = 0;
-	let part = 0;
-	let prevSeason = null;
+// zip ep counts
+function numberByZip(slots, tmdbSeasons) {
+	const episodic = slots.filter((s) => !s.isMovie);
+	if (!episodic.length || !tmdbSeasons?.length) return false;
 
-	for (const slot of slots) {
-		const declared = numberFromTitle(slot.label);
-		const declaredBase = declared ? Number(declared.split(".")[0]) : null;
-
-		if (declaredBase != null && declaredBase !== base) {
-			base = declaredBase;
-			part = 1;
-		} else if (prevSeason === null || slot.tmdbSeason !== prevSeason) {
-			base = declaredBase ?? base + 1;
-			part = 1;
-		} else {
-			// Continuing the current run. This is the case that carries an
-			// untitled cour: Frieren's newest is filed under tmdb season 1
-			// with nothing but an offset to say it follows the second season.
-			part += 1;
+	let i = 0;
+	for (const season of tmdbSeasons) {
+		const bucket = [];
+		let sum = 0;
+		while (i < episodic.length && sum < season.episode_count) {
+			if (episodic[i].episodes == null) return false;
+			sum += episodic[i].episodes;
+			bucket.push(episodic[i]);
+			i++;
 		}
+		if (sum !== season.episode_count || !bucket.length) return false;
+		bucket.forEach((slot, k) => {
+			slot.number =
+				bucket.length > 1
+					? `${season.season_number}.${k + 1}`
+					: `${season.season_number}`;
+			// AniList art wins: it is per-entry, so split cours stay visually
+			// distinct where a tmdb season poster would be shared between 3.1
+			// and 3.2. It is textless, which the ui covers by overlaying the
+			// show logo. tmdb is the fallback and stays available as an
+			// alternative. The zip is the only thing that knows which tmdb
+			// season a slot belongs to, so the mapping rides along with it.
+			slot.tmdbPosterUrl = season.posterUrl ?? null;
+			if (!slot.posterUrl) slot.posterUrl = season.posterUrl ?? null;
+		});
+	}
+	// unreleased entries have no TMDB counterpart -- number them off the end
+	let trailing = tmdbSeasons.length;
+	for (; i < episodic.length; i++) episodic[i].number = String(++trailing);
+	return true;
+}
 
-		prevSeason = slot.tmdbSeason;
-		slot.number = `${base}.${part}`;
+function applyNumbers(slots, tmdbSeasons) {
+	const zipped = numberByZip(slots, tmdbSeasons);
+	if (!zipped) {
+		let n = 0;
+		for (const slot of slots) if (!slot.isMovie) slot.number = String(++n);
+	}
+
+	// an explicit season number in the title beats the zip
+	const base = (n) => String(n ?? "").split(".")[0];
+	for (const slot of slots) {
+		const fromTitle = numberFromTitle(slot.label);
+		if (!fromTitle) continue;
+		if (!slot.number || base(fromTitle) !== base(slot.number)) {
+			slot.number = fromTitle;
+		}
 	}
 
 	// "3.1" with no sibling "3.2" is just "3"
 	const counts = new Map();
 	for (const slot of slots) {
-		const key = slot.number.split(".")[0];
-		counts.set(key, (counts.get(key) ?? 0) + 1);
+		const base = slot.number?.split(".")[0];
+		if (base) counts.set(base, (counts.get(base) ?? 0) + 1);
 	}
 	for (const slot of slots) {
-		const key = slot.number.split(".")[0];
-		if (counts.get(key) === 1) slot.number = key;
+		if (
+			slot.number?.includes(".") &&
+			counts.get(slot.number.split(".")[0]) === 1
+		) {
+			slot.number = slot.number.split(".")[0];
+		}
 	}
 }
 
-// --- assembly ---------------------------------------------------------------
-
 export async function buildAnimeChain({
-	tmdbId,
 	nativeTitle,
 	fallbackTitle,
 	year,
 	tmdbSeasons,
 }) {
-	const rows = tmdbRows(tmdbId);
-	if (!rows.length) {
-		return resolveUnmapped({ nativeTitle, fallbackTitle, year, tmdbSeasons });
-	}
+	const root = await resolveRoot(nativeTitle, fallbackTitle, year);
+	if (!root) return null;
 
-	// Season 0 is where the mapping files ovas, specials and tie-in films.
-	// A MOVIE-typed row is a film wherever it happens to be filed.
-	const typeOf = (row) => aodEntry(row.i)?.k ?? row.k;
-	const episodicRows = rows.filter(
-		(row) => (row.s ?? 1) > 0 && typeOf(row) !== "MOVIE",
+	const { ids: discovered, sources } = collectIds(root);
+	if (sources.size) await expandSources(sources, discovered);
+
+	// only main-format entries can enter the spine
+	const isShortForm = (n) => n.format === "ONA" && n.episodes === 1;
+
+	const mainIds = new Set(
+		[...discovered.values()]
+			.filter((n) => MAIN_FORMATS.includes(n.format) && !isShortForm(n))
+			.map((n) => n.id),
 	);
-	const extraRows = rows.filter((row) => !episodicRows.includes(row));
-	if (!episodicRows.length) {
-		return resolveUnmapped({ nativeTitle, fallbackTitle, year, tmdbSeasons });
+	mainIds.add(root.id);
+
+	const edges = await fetchRelations(mainIds);
+	const nodes = {};
+	for (const [id, node] of discovered) {
+		nodes[id] = {
+			...node,
+			relations: edges[id]?.relations ?? node.relations,
+		};
+	}
+	await growSpine(nodes, discovered);
+
+	// growSpine can add entries the first pass never saw, so the main set has
+	// to be taken again rather than reused from above
+	for (const node of Object.values(nodes)) {
+		if (MAIN_FORMATS.includes(node.format) && !isShortForm(node))
+			mainIds.add(node.id);
 	}
 
-	// The snapshot is authoritative for finished series and wrong for airing
-	// ones, so only the airing ids -- plus anything the snapshot missed -- cost
-	// a request. A fully finished show resolves without touching the network.
-	// Only AniList-backed entries can be refreshed -- a "d" row has no AniList
-	// record to ask about, and lives on whatever the snapshot last knew.
-	const stale = [];
-	for (const row of rows) {
-		const id = anilistIdOf(row.i);
-		if (id == null) continue;
-		const entry = aodEntry(row.i);
-		if (!entry || entry.s === "ONGOING" || entry.s === "UPCOMING") {
-			stale.push(id);
-		}
-	}
-	let live = new Map();
-	if (stale.length) {
-		try {
-			live = await fetchLive(stale);
-		} catch (error) {
-			// the snapshot is still a usable answer, just an older one
-			console.error("AniList refresh failed: ", error.message);
-		}
-	}
-
-	// tmdb's own episode_count per season, to fill rows the mapping can name
-	// but neither source can count -- always the newest cour.
-	const tmdbCounts = new Map(
-		(tmdbSeasons ?? []).map((s) => [s.season_number, s.episode_count]),
+	const groups = groupAlternatives(nodes, mainIds);
+	const rootGroup = [...groups.keys()].find((g) =>
+		groups.get(g).includes(root.id),
 	);
-	const tmdbPosters = new Map(
-		(tmdbSeasons ?? []).map((s) => [s.season_number, s.posterUrl ?? null]),
+	const reachable = reachableFrom(nodes, root.id);
+	const { ordered, orphans, primary } = buildSpine(
+		nodes,
+		groups,
+		rootGroup,
+		reachable,
 	);
 
-	const slots = episodicRows.map((row, index) => {
-		const season = row.s ?? 1;
-		const entry = aodEntry(row.i);
-		const media = live.get(anilistIdOf(row.i));
-
-		// A row with no offset starts at zero; the next row in the same season
-		// starts where this one ends, which is what bounds its length.
-		const next = episodicRows[index + 1];
-		const offset = row.o ?? 0;
-		const seasonTotal = tmdbCounts.get(season) ?? null;
-		const span =
-			next && (next.s ?? 1) === season && next.o != null
-				? next.o - offset
-				: seasonTotal != null
-					? seasonTotal - offset
-					: null;
-		// a tmdb season that has not caught up with the mapping yet gives a
-		// negative remainder, which is worse than admitting we do not know
-		const derived = span != null && span > 0 ? span : null;
-
-		const episodes = media?.episodes ?? entry?.e ?? derived ?? null;
-		// Left null when neither source names the cour. Synthesising something
-		// from the show title looks helpful and is not: the ui already falls
-		// back to the show title, and a made-up "Season 2" in the label feeds
-		// straight back into numberFromTitle and renumbers the chain.
-		const label =
-			media?.title?.english ?? media?.title?.romaji ?? entry?.t ?? null;
-
-		// AniList art when it was fetched, otherwise the (upsized) picture the
-		// snapshot carries. Both are textless key visuals; tmdb's season
-		// poster carries its own title lockup and is the fallback.
-		const textless = media?.coverImage?.extraLarge ?? entry?.p ?? null;
-		const tmdbPoster = tmdbPosters.get(season) ?? null;
-
+	const slots = ordered.map((group, index) => {
+		const lead = primary(group);
+		const others = groups
+			.get(group)
+			.filter((id) => id !== lead.id)
+			.map((id) => shape(nodes[id]));
 		return {
-			// slots stay a superset of the tmdb season shape
+			// slots are a superset of the tmdb season shape on purpose
 			season_number: index + 1,
-			episode_count: episodes ?? 0,
-			tmdbSeason: season,
-			// the index key, stable whether the entry came from AniList or
-			// AniDB, and the identity everything downstream matches on
-			uid: row.i ?? null,
-			anilistId: anilistIdOf(row.i),
-			label,
+			episode_count: lead.episodes ?? 0,
+			...shape(lead),
 			number: null,
-			episodes,
-			startDate: startDateOf(entry),
-			posterUrl: textless ?? tmdbPoster,
-			// AOD ships no palette. Populated only on the airing path until the
-			// poster mirror lands and can pull a swatch off the stored asset.
-			posterColor: media?.coverImage?.color ?? null,
+			variants: others,
 		};
 	});
+	applyNumbers(slots, tmdbSeasons);
 
-	// The mapping lists cours that have been announced and nothing more -- no
-	// title, no date, and no episodes on tmdb either. There is nothing to
-	// render and nothing to track, so they are dropped until they air.
-	const known = slots.filter(
-		(slot) => slot.episodes || slot.label || slot.startDate,
+	// the manga/novel the anime adapts
+	const sourceEdges = (root.relations?.edges ?? []).filter(
+		(e) => e.relationType === "ADAPTATION" && e.node.type === "MANGA",
 	);
-	known.forEach((slot, index) => (slot.season_number = index + 1));
+	const sourceEdge =
+		sourceEdges.find((e) => e.node.format === "MANGA") ?? sourceEdges[0];
 
-	applyNumbers(known);
-	for (const slot of known) delete slot.tmdbSeason;
+	// ovas/specials plus anything that never joined the root's chain -- recap
+	// films, non-canon movies, spin-off shorts.
+	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
 
-	// each extra records the slot it aired after, so the ui can file it at that
-	// transition rather than park it in the middle of the episode chain
-	const anchors = known
-		.filter((slot) => slot.startDate)
-		.map((slot) => ({
-			afterSlot: slot.number,
-			afterSlotAnilistId: slot.anilistId,
-			date: slot.startDate,
+	// A feature-length special is a film in everything but AniList's label.
+	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
+	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
+	// the two recap films surfaced while the ending did not. Runtime is what
+	// separates these from the 20-minute shorts that belong in side stories.
+	const FEATURE_MINUTES = 45;
+	const isFeature = (n) =>
+		n?.format === "MOVIE" ||
+		(["SPECIAL", "OVA"].includes(n?.format) &&
+			(n?.duration ?? 0) >= FEATURE_MINUTES &&
+			(n?.episodes ?? 1) <= 1);
+
+	// A recap compiles episodes rather than telling its own story, so it hangs
+	// off the seasons it covers (PARENT) and adapts nothing. An original film
+	// adapts a print work -- every My Hero Academia film has a tie-in novel --
+	// and those also carry PARENT to mark the season they sit alongside, so
+	// PARENT on its own is not the signal. Having no source is.
+	//
+	//   ~Chronicle~        PARENT x4, no adaptation        -> recap
+	//   Roar of Awakening  PARENT -> S2, no adaptation     -> recap
+	//   Two Heroes         PARENT -> S3, ADAPTATION -> novel -> keep
+	//   Infinity Castle    no PARENT at all                -> keep
+	const sourceId = sourceEdge?.node?.id;
+	const isRecap = (n) => {
+		const edges = n?.relations?.edges ?? [];
+		const compiles = edges.some(
+			(e) => e.relationType === "PARENT" && e.node?.type === "ANIME",
+		);
+		if (!compiles) return false;
+		// both recaps and original films adapt something, so what they adapt is
+		// the tell: a recap points at the show's own source, an original film
+		// at a tie-in written for it.
+		const ownSource = edges.some(
+			(e) =>
+				e.relationType === "ADAPTATION" &&
+				e.node?.type === "MANGA" &&
+				e.node.id !== sourceId,
+		);
+		return !ownSource;
+	};
+
+	// Films leave the slot array entirely. A film is watched in one sitting and
+	// scored in the movies list, so it is not a position the episode stepper
+	// should ever land on -- it is a pointer that says "this comes next, open
+	// it over there". Slots stay purely episodic.
+	const filmNodes = [
+		...Object.values(nodes).filter(
+			(n) => isFeature(n) && n.format !== "MOVIE",
+		),
+		...[...orphanIds]
+			.map((id) => nodes[id])
+			.filter((n) => n?.format === "MOVIE"),
+		...slots.filter((s) => s.isMovie),
+	].filter((n) => !isRecap(nodes[n.anilistId ?? n.id] ?? n));
+	const filmIds = new Set(filmNodes.map((f) => f.anilistId ?? f.id));
+	for (const id of filmIds) orphanIds.delete(id);
+
+	const episodic = slots.filter((s) => !s.isMovie);
+	slots.length = 0;
+	slots.push(...episodic);
+	// season_number is the tmdb-shaped fallback -- keep it a real position
+	slots.forEach((s, i) => (s.season_number = i + 1));
+
+	// anchored to the slot they aired after
+	const anchors = slots
+		.filter((s) => s.startDate)
+		.map((s) => ({
+			afterSlot: s.number,
+			afterSlotAnilistId: s.anilistId,
+			date: s.startDate,
 		}))
 		.sort((a, z) => a.date.localeCompare(z.date));
 
-	const anchorFor = (date) => {
+	const anchorFor = (node) => {
+		const date = asDate(node);
 		if (!date) return { afterSlot: null, afterSlotAnilistId: null };
 		let hit = null;
-		for (const anchor of anchors) if (anchor.date <= date) hit = anchor;
+		for (const a of anchors) if (a.date <= date) hit = a;
 		return {
 			afterSlot: hit?.afterSlot ?? null,
 			afterSlotAnilistId: hit?.afterSlotAnilistId ?? null,
 		};
 	};
 
-	// Everything hanging off the chain: the mapping's season 0 rows, plus one
-	// hop through the snapshot's relation graph. That hop is what surfaces
-	// films tmdb never filed under the show -- Mugen Train is related to
-	// Kimetsu season 1 and appears nowhere in its tmdb season list.
-	const overrides = overridesFor(tmdbId);
-	const slotKeys = new Set(known.map((slot) => slot.uid).filter(Boolean));
-	const extras = new Map();
-	for (const row of extraRows) {
-		if (row.i && aodEntry(row.i)) extras.set(row.i, aodEntry(row.i));
-	}
-	for (const key of slotKeys) {
-		for (const related of relatedKeys(key)) {
-			if (slotKeys.has(related) || extras.has(related)) continue;
-			const entry = aodEntry(related);
-			// Discovery sticks to releases at least one of the big two
-			// trackers recognises. AniDB splits material the others treat as
-			// one release, so admitting every "d" key through relations lists
-			// Attack on Titan's ovas twice and turns Demon Slayer's recap
-			// screenings into six films. A "d" entry MyAnimeList also carries
-			// is a real release AniList simply never indexed -- Attack on
-			// Titan's own finale film is one. Rows tmdb maps to the show
-			// directly are honoured either way.
-			if (related[0] !== "a" && !entry?.m) continue;
-			// TV entries reachable this way are spin-off series with tmdb shows
-			// of their own, not extras belonging to this one
-			if (entry && entry.k !== "TV") extras.set(related, entry);
-		}
-	}
-	for (const key of overrides.exclude) extras.delete(key);
+	const sideStories = Object.values(nodes)
+		.filter(
+			(n) =>
+				!filmIds.has(n.id) &&
+				(SIDE_FORMATS.includes(n.format) || orphanIds.has(n.id)),
+		)
+		.sort((a, z) => sortKey(a) - sortKey(z))
+		.map((n) => ({ ...shape(n), ...anchorFor(n) }));
 
-	const shape = (key, entry) => ({
-		uid: key,
-		anilistId: anilistIdOf(key),
-		label: entry.t,
-		format: entry.k,
-		episodes: entry.e ?? null,
-		duration: entry.d ?? null,
-		startDate: startDateOf(entry),
-		averageScore: scoreOf(entry),
-		posterUrl: entry.p ?? null,
-		posterColor: null,
-		...anchorFor(startDateOf(entry)),
-	});
+	// each film records the season it follows, so the ui can offer it at that
+	// transition rather than parking it in the middle of the episode chain
+	const films = filmNodes
+		.map((n) => (n.anilistId ? n : shape(n)))
+		.sort((a, z) => (a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"))
+		.map((film) => ({
+			anilistId: film.anilistId,
+			label: film.label,
+			duration: film.duration ?? null,
+			startDate: film.startDate ?? null,
+			averageScore: film.averageScore ?? null,
+			posterUrl: film.posterUrl ?? null,
+			posterColor: film.posterColor ?? null,
+			...(() => {
+				const date = film.startDate;
+				if (!date) return { afterSlot: null, afterSlotAnilistId: null };
+				let hit = null;
+				for (const a of anchors) if (a.date <= date) hit = a;
+				return {
+					afterSlot: hit?.afterSlot ?? null,
+					afterSlotAnilistId: hit?.afterSlotAnilistId ?? null,
+				};
+			})(),
+		}));
 
-	const films = [];
-	const sideStories = [];
-	for (const [key, entry] of extras) {
-		// AOD tags compilations outright, which is what makes recap detection
-		// possible without AniList's typed relation edges. A recap is still
-		// worth listing, just not as a film you are told to go and watch.
-		const film = overrides.films.has(key)
-			? true
-			: overrides.sides.has(key)
-				? false
-				: isFeature(entry) && !entry.x;
-		if (film) {
-			films.push({
-				...shape(key, entry),
-				// the film's own tmdb id, so opening it hands straight over to
-				// the movie pipeline instead of re-resolving by title
-				tmdbMovieId: entry.mv ?? null,
-			});
-		} else {
-			sideStories.push(shape(key, entry));
-		}
-	}
-	films.sort((a, z) => (a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"));
-	sideStories.sort(
-		(a, z) => chronoKey(aodEntry(a.uid)) - chronoKey(aodEntry(z.uid)),
-	);
-
-	const root = known[0];
 	return {
-		anilistId: root?.anilistId ?? null,
-		titleRomaji: aodEntry(root?.uid)?.t ?? null,
-		slots: known,
+		anilistId: root.id,
+		titleRomaji: root.title?.romaji ?? null,
+		titleNative: root.title?.native ?? null,
+		communityScore: root.averageScore ?? null,
+		sourceMedia: sourceEdge
+			? {
+					anilistId: sourceEdge.node.id,
+					format: sourceEdge.node.format,
+					label: label(sourceEdge.node),
+				}
+			: null,
+		slots,
 		films,
 		sideStories,
 	};

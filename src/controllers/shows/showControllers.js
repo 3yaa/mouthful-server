@@ -149,19 +149,11 @@ const camelToSnakeMapping = {
 // A reload rebuilds the slot array from scratch
 const remapProgress = (oldShow, nextSeasons) => {
 	const oldSlot = oldShow?.seasons?.[oldShow.cur_season_index ?? 0];
-	if (!Array.isArray(nextSeasons)) return null;
+	if (!oldSlot?.anilistId || !Array.isArray(nextSeasons)) return null;
 
-	// uid first: it is set on every part, including the cours only AniDB
-	// carries, where anilistId is null and would match every other such part.
-	// anilistId stays as the fallback for rows written before uid existed.
-	const match = oldSlot?.uid
-		? (s) => s.uid === oldSlot.uid
-		: oldSlot?.anilistId
-			? (s) => s.anilistId === oldSlot.anilistId
-			: null;
-	if (!match) return null;
-
-	const index = nextSeasons.findIndex(match);
+	const index = nextSeasons.findIndex(
+		(s) => s.anilistId === oldSlot.anilistId,
+	);
 	if (index === -1 || index === oldShow.cur_season_index) return null;
 	return index;
 };
