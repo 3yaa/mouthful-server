@@ -295,6 +295,31 @@ async function growPrints(nodes, prints) {
 	}
 }
 
+// Side stories hang off the season they belong to rather than off the root:
+// My Hero Academia's rescue-training OVA is a SIDE_STORY of season 1 and its
+// OVAs are SIDE_STORYs of season 5, so the sequel walk never saw any of them
+// and the show came back with two side entries instead of eight. One round,
+// from entries already on the chain -- recursing would leave the franchise
+// through the first crossover it meets.
+async function growSides(nodes) {
+	const wanted = new Set();
+	for (const node of Object.values(nodes)) {
+		for (const edge of node.relations?.edges ?? []) {
+			if (edge.relationType !== "SIDE_STORY") continue;
+			const n = edge.node;
+			if (n?.type !== "ANIME") continue;
+			if (!SLOT_FORMATS.includes(n.format)) continue;
+			if (!nodes[n.id]) wanted.add(n.id);
+		}
+	}
+	if (!wanted.size) return;
+
+	const fetched = await fetchNodes(wanted);
+	for (const node of Object.values(fetched)) {
+		if (node.type === "ANIME") nodes[node.id] = node;
+	}
+}
+
 // Long-running franchises outrun the initial walk. Every JoJo part adapts a
 // different manga, so Diamond is Unbreakable hangs off a volume the root has
 // never heard of -- discovery stopped at the Egypt arc and the show came back
@@ -503,47 +528,78 @@ function buildSpine(nodes, groups, rootGroup, reachable) {
 	return { ordered, orphans, primary };
 }
 
-// "Shingeki no Kyojin Season 3 Part 2" -> "3.2", "Sousou no Frieren 2nd Season" -> "2"
-function numberFromTitle(title) {
-	if (!title) return null;
+// "Shingeki no Kyojin Season 3 Part 2" -> { season: 3, part: 2 }
+// "Sousou no Frieren 2nd Season"        -> { season: 2, part: null }
+// "... Final Season Part 2"             -> { season: null, part: 2 }
+function numbersFromTitle(title) {
+	if (!title) return { season: null, part: null };
 	const season =
 		title.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i) ??
 		title.match(/\bseason\s+(\d+)\b/i);
-	if (!season) return null;
-	const part = title.match(/\bpart\s+(\d+)\b/i);
-	return part ? `${season[1]}.${part[1]}` : season[1];
+	// cour is the same idea under a different word, and a bare "Part 2" is how
+	// a split season is labelled when it has a name instead of a number
+	const part =
+		title.match(/\bpart\s+(\d+)\b/i) ??
+		title.match(/\b(\d+)(?:st|nd|rd|th)\s+cour\b/i) ??
+		title.match(/\bcour\s+(\d+)\b/i);
+	return {
+		season: season ? Number(season[1]) : null,
+		part: part ? Number(part[1]) : null,
+	};
 }
 
-// Numbering is spine position now that TMDB's season list is gone. An explicit
-// season number in the title still wins, since AniList entry order does not
-// always agree with how a show numbers itself.
+// Numbering is spine position, corrected by what the entries call themselves.
+//
+// A split cour is not a season of its own. "Final Season" and "Final Season
+// Part 2" are one season in two parts, and counting them as 5 and 6 turned a
+// four-season franchise into a six-season one:
+//
+//   before   1  2  3  3.2  5  6      <- 4 never appears, 5/6 are one season
+//   after    1  2  3-1 3-2 4-1 4-2
+//
+// Parts are written 4-1, not 4.1: a decimal reads as a version number, and
+// "3.10" would sort before "3.2".
 function applyNumbers(slots) {
+	const parsed = slots.map((slot) => numbersFromTitle(slot.label));
+	let season = 0;
+	let part = 1;
+
 	slots.forEach((slot, i) => {
-		slot.number = String(i + 1);
+		const { season: fromTitle, part: partNo } = parsed[i];
+		// a part past the first continues the season before it; anything else
+		// opens a new one. An explicit season number still wins, and the
+		// counter resyncs to it so everything after follows on.
+		const continues =
+			i > 0 &&
+			partNo !== null &&
+			partNo > 1 &&
+			(fromTitle === null || fromTitle === season);
+
+		if (continues) {
+			part = partNo;
+		} else {
+			season = fromTitle ?? season + 1;
+			part = partNo ?? 1;
+		}
+		slot.seasonNo = season;
+		slot.partNo = part;
 	});
 
-	const base = (n) => String(n ?? "").split(".")[0];
-	for (const slot of slots) {
-		const fromTitle = numberFromTitle(slot.label);
-		if (!fromTitle) continue;
-		if (!slot.number || base(fromTitle) !== base(slot.number)) {
-			slot.number = fromTitle;
-		}
-	}
+	// the suffix only earns its place when there is another part to tell this
+	// one apart from -- a season nothing else shares is just its number
+	const members = new Map();
+	for (const slot of slots)
+		members.set(slot.seasonNo, (members.get(slot.seasonNo) ?? 0) + 1);
 
-	// "3.1" with no sibling "3.2" is just "3"
-	const counts = new Map();
 	for (const slot of slots) {
-		const b = slot.number?.split(".")[0];
-		if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
-	}
-	for (const slot of slots) {
-		if (
-			slot.number?.includes(".") &&
-			counts.get(slot.number.split(".")[0]) === 1
-		) {
-			slot.number = slot.number.split(".")[0];
-		}
+		slot.number =
+			members.get(slot.seasonNo) > 1
+				? `${slot.seasonNo}-${slot.partNo}`
+				: String(slot.seasonNo);
+		// working state -- `number` carries everything downstream needs, and
+		// these would otherwise be persisted into the seasons jsonb
+		delete slot.seasonNo;
+		delete slot.partNo;
 	}
 }
 
@@ -570,6 +626,9 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 	// in whatever sits on its own sequel chain
 	await growPrints(nodes, prints);
 	await growSpine(nodes);
+	// last: what these turn up is optional viewing, and running it before the
+	// spine would let a side entry's own sequels grow the chain
+	await growSides(nodes);
 
 	// Only main-format entries can enter the spine. This runs after the batch
 	// because isShortForm needs the episode count, which discovery does not
@@ -629,6 +688,18 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 		: null;
 	const sourceId = sourceEdge?.node?.id;
 
+	// A feature-length special is a film in everything but AniList's label.
+	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
+	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
+	// the two recap films surfaced while the ending did not. Runtime is what
+	// separates these from the 20-minute shorts that belong in side stories.
+	const FEATURE_MINUTES = 45;
+	const isFeature = (n) =>
+		n?.format === "MOVIE" ||
+		(["SPECIAL", "OVA"].includes(n?.format) &&
+			(n?.duration ?? 0) >= FEATURE_MINUTES &&
+			(n?.episodes ?? 1) <= 1);
+
 	// A recap compiles episodes rather than telling its own story, so it hangs
 	// off the seasons it covers (PARENT) and adapts nothing. An original film
 	// adapts a print work -- every My Hero Academia film has a tie-in novel --
@@ -640,6 +711,12 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 	//   Two Heroes         PARENT -> S3, ADAPTATION -> novel -> keep
 	//   Infinity Castle    no PARENT at all                  -> keep
 	const isRecap = (n) => {
+		// A recap has to be big enough to be one. My Hero Academia's rescue
+		// training OVA is 27 minutes with a PARENT edge to season 1 and no
+		// source of its own, which is the recap shape exactly -- it was being
+		// folded into season 1 as a variant and vanishing from the UI. Nothing
+		// under feature length compiles a season.
+		if (!isFeature(n)) return false;
 		const edges = n?.relations?.edges ?? [];
 		const compiles = edges.some(
 			(e) => e.relationType === "PARENT" && e.node?.type === "ANIME",
@@ -670,18 +747,6 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 		s.position = i + 1;
 		s.season_number = i + 1;
 	});
-
-	// A feature-length special is a film in everything but AniList's label.
-	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
-	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
-	// the two recap films surfaced while the ending did not. Runtime is what
-	// separates these from the 20-minute shorts that belong in side stories.
-	const FEATURE_MINUTES = 45;
-	const isFeature = (n) =>
-		n?.format === "MOVIE" ||
-		(["SPECIAL", "OVA"].includes(n?.format) &&
-			(n?.duration ?? 0) >= FEATURE_MINUTES &&
-			(n?.episodes ?? 1) <= 1);
 
 	// A recap of one specific season belongs to that season -- it is an
 	// alternate way to watch it. A retrospective spanning four seasons belongs
