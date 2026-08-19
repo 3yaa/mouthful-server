@@ -143,12 +143,20 @@ async function resolveImdbToMovie(pairs, apiKey) {
 		}),
 	);
 
-	fs.writeFileSync(FIND_CACHE, JSON.stringify(cache));
+	// a cache that cannot be written is a slow next build, not a failed one
+	try {
+		fs.writeFileSync(FIND_CACHE, JSON.stringify(cache));
+	} catch (error) {
+		console.warn(`  could not write the find cache: ${error.message}`);
+	}
 	return cache;
 }
 
 async function main() {
 	console.log("building anime index");
+	// src/data holds nothing but generated files, so git never creates it on a
+	// fresh checkout. Both this build's outputs land there.
+	fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
 	const release = await newestModbTag();
 	console.log(
@@ -301,7 +309,6 @@ async function main() {
 		tv,
 	};
 
-	fs.mkdirSync(path.dirname(OUT), { recursive: true });
 	fs.writeFileSync(OUT, JSON.stringify(payload));
 
 	const films = Object.values(aod).filter((e) => isFeature(e));
