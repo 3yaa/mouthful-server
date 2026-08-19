@@ -7,9 +7,14 @@ export async function useTmdbSearchAPI(req, res) {
   try {
     const userId = req.user.id;
     const { title, year } = req.query;
-    const url = `https://api.themoviedb.org/3/search/tv?api_key=${
-      process.env.TMDB_API_KEY
-    }&query=${encodeURIComponent(title)}&first_air_date_year=${year}`;
+    const url =
+      `https://api.themoviedb.org/3/search/tv?api_key=${
+        process.env.TMDB_API_KEY
+      }&query=${encodeURIComponent(title)}` +
+      // the middleware leaves this undefined unless a real year came in --
+      // sending `first_air_date_year=undefined` narrowed nothing and cost a
+      // malformed request
+      (year ? `&first_air_date_year=${year}` : "");
     // make call
     const response = await fetch(url);
     if (!response.ok) {

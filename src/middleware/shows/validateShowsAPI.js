@@ -9,7 +9,13 @@ export const validateShowsAPI = (req, res, next) => {
 	}
 
 	req.query.title = title.trim();
-	req.query.limit = parseInt(year);
+	// a year narrows the tmdb search; anything that is not a 4-digit year is
+	// dropped rather than forwarded as "undefined"
+	const parsedYear = parseInt(year, 10);
+	req.query.year =
+		Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999
+			? parsedYear
+			: undefined;
 
 	next();
 };

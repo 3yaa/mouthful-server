@@ -29,7 +29,7 @@ export function isAnime(tmdbDetail) {
 // studios ride along per entry: the production house genuinely changes between
 // seasons, which is the whole reason metadata is stored per slot
 const MEDIA_FIELDS = `
-	id type format episodes duration status
+	id type format episodes duration status averageScore
 	title { romaji english native }
 	startDate { year month }
 	endDate { year month }
@@ -42,14 +42,14 @@ const MEDIA_FIELDS = `
 // levels deep.
 const REL_NODE = `id type format`;
 
+// Two levels, not three: AniList answers a third nested `relations` with an
+// empty edge list every time, so asking for it only spent query complexity.
+// What lives out there is reached by growPrints and growSpine instead.
 const ROOT_FRAGMENT = `fragment Root on Media {
 	${MEDIA_FIELDS}
 	relations { edges { relationType node {
 		${REL_NODE}
-		relations { edges { relationType node {
-			${REL_NODE}
-			relations { edges { relationType node { ${REL_NODE} } } }
-		} } }
+		relations { edges { relationType node { ${REL_NODE} } } }
 	} } }
 }`;
 
@@ -152,11 +152,15 @@ const mainStudio = (n) => {
 
 const totalMinutes = (n) => (n?.episodes ?? 1) * (n?.duration ?? 0);
 
+// AniList's MediaFormat, narrowed to the union the client declares
+const FORMATS = new Set(["TV", "TV_SHORT", "ONA", "MOVIE", "OVA", "SPECIAL"]);
+const animeFormat = (f) => (FORMATS.has(f) ? f : "UNKNOWN");
+
 function shape(n) {
 	return {
 		anilistId: n.id,
 		label: label(n),
-		format: n.format,
+		format: animeFormat(n.format),
 		isMovie: n.format === "MOVIE",
 		episodes: n.episodes ?? null,
 		duration: n.duration ?? null,
@@ -168,6 +172,21 @@ function shape(n) {
 		posterColor: n.coverImage?.color ?? null,
 	};
 }
+
+// films and side stories, per AnimeExtraProps. averageScore lives here rather
+// than on slots: anilist_meta is display-only, so a stale community score is
+// harmless, while a slot carrying one invites sorting on it.
+const extraShape = (n) => ({
+	anilistId: n.id,
+	label: label(n),
+	format: animeFormat(n.format),
+	episodes: n.episodes ?? null,
+	duration: n.duration ?? null,
+	startDate: fuzzy(n.startDate),
+	averageScore: n.averageScore ?? null,
+	posterUrl: n.coverImage?.extraLarge ?? null,
+	posterColor: n.coverImage?.color ?? null,
+});
 
 // resolves the entry the user actually searched for
 async function resolveRoot(nativeTitle, fallbackTitle, year) {
@@ -237,25 +256,43 @@ function collectIds(root) {
 			if (NOISE_RELATIONS.includes(inner.relationType)) continue;
 			keep(inner.node);
 
-			// My Hero Academia's four films are not children of the manga at
-			// all. Each has a light-novel tie-in hanging off the manga, and the
-			// film hangs off that:
+			// My Hero Academia's films are not children of the manga at all.
+			// Each has a light-novel tie-in hanging off the manga, and the film
+			// hangs off that:
 			//
 			//   manga -> SIDE_STORY -> "THE MOVIE: Futari no Hero" (NOVEL)
 			//         -> ADAPTATION -> film
 			//
-			// so a two-level walk finds the novel and stops. Descend only past
-			// a print work: an anime-to-anime edge at this depth is a sequel
-			// chain, which growSpine follows properly, and expanding it here
-			// would drag unrelated franchises in through crossovers.
-			if (inner.node?.type !== "MANGA") continue;
-			for (const deep of inner.node.relations?.edges ?? []) {
-				if (NOISE_RELATIONS.includes(deep.relationType)) continue;
-				keep(deep.node);
-			}
+			// AniList answers the third level of `relations` in a single query
+			// with an empty edge list, so there is nothing to walk here -- the
+			// novel is recorded as a source above and growPrints picks the film
+			// up off the batched record, where the edges are actually present.
 		}
 	}
 	return { ids, sources };
+}
+
+// The films that hang off a tie-in novel rather than off the show. collectIds
+// cannot reach them -- AniList truncates `relations` past the second level of
+// one query -- but the print works themselves were fetched as top-level records
+// in the same batch, and those do carry their edges.
+async function growPrints(nodes, prints) {
+	const wanted = new Set();
+	for (const print of Object.values(prints)) {
+		for (const edge of print.relations?.edges ?? []) {
+			if (NOISE_RELATIONS.includes(edge.relationType)) continue;
+			const n = edge.node;
+			if (n?.type !== "ANIME") continue;
+			if (!SLOT_FORMATS.includes(n.format)) continue;
+			if (!nodes[n.id]) wanted.add(n.id);
+		}
+	}
+	if (!wanted.size) return;
+
+	const fetched = await fetchNodes(wanted);
+	for (const node of Object.values(fetched)) {
+		if (node.type === "ANIME") nodes[node.id] = node;
+	}
 }
 
 // Long-running franchises outrun the initial walk. Every JoJo part adapts a
@@ -529,6 +566,9 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 	// if AniList did not return the root, fall back to the resolve payload
 	nodes[root.id] ??= root;
 
+	// print works first: a film reached this way still needs growSpine to pull
+	// in whatever sits on its own sequel chain
+	await growPrints(nodes, prints);
 	await growSpine(nodes);
 
 	// Only main-format entries can enter the spine. This runs after the batch
@@ -564,7 +604,17 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 				...shape(nodes[id]),
 				variantKind: "alternate_cut",
 			}));
-		return { ...shape(lead), number: null, position: 0, variants: others };
+		// slots stay a superset of the tmdb season shape on purpose: progress
+		// bars, pickers and calcCurProgress read season_number/episode_count and
+		// must keep working for anime rows untouched
+		return {
+			season_number: 0,
+			episode_count: lead.episodes ?? 0,
+			...shape(lead),
+			number: null,
+			position: 0,
+			variants: others,
+		};
 	});
 
 	// the manga/novel the anime adapts. The edge is skinny now, so the title
@@ -618,6 +668,7 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 	applyNumbers(slots);
 	slots.forEach((s, i) => {
 		s.position = i + 1;
+		s.season_number = i + 1;
 	});
 
 	// A feature-length special is a film in everything but AniList's label.
@@ -680,16 +731,25 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 
 	// anchored to the slot they aired after, by id -- position is recomputed on
 	// every rebuild and must never be persisted as a reference
+	// afterSlot is the display number and afterSlotAnilistId the durable
+	// reference -- the number changes when the spine is rebuilt, the id does not
 	const anchors = slots
 		.filter((s) => s.startDate)
-		.map((s) => ({ afterSlotAnilistId: s.anilistId, date: s.startDate }))
+		.map((s) => ({
+			afterSlot: s.number,
+			afterSlotAnilistId: s.anilistId,
+			date: s.startDate,
+		}))
 		.sort((a, z) => a.date.localeCompare(z.date));
 
 	const anchorFor = (date) => {
-		if (!date) return { afterSlotAnilistId: null };
+		if (!date) return { afterSlot: null, afterSlotAnilistId: null };
 		let hit = null;
 		for (const a of anchors) if (a.date <= date) hit = a;
-		return { afterSlotAnilistId: hit?.afterSlotAnilistId ?? null };
+		return {
+			afterSlot: hit?.afterSlot ?? null,
+			afterSlotAnilistId: hit?.afterSlotAnilistId ?? null,
+		};
 	};
 
 	const sideStories = Object.values(nodes)
@@ -700,22 +760,20 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 				(SIDE_FORMATS.includes(n.format) || orphanIds.has(n.id)),
 		)
 		.sort((a, z) => sortKey(a) - sortKey(z))
-		.map((n) => ({ ...shape(n), ...anchorFor(fuzzy(n.startDate)) }));
+		.map((n) => ({ ...extraShape(n), ...anchorFor(fuzzy(n.startDate)) }));
 
-	const films = filmNodes
-		.map((n) => (n.anilistId ? n : shape(n)))
+	const films = [...filmIds]
+		.map((id) => nodes[id])
+		.filter(Boolean)
+		.map(extraShape)
 		.sort((a, z) =>
 			(a.startDate ?? "9999").localeCompare(z.startDate ?? "9999"),
 		)
 		.map((film) => ({
-			anilistId: film.anilistId,
-			label: film.label,
-			duration: film.duration ?? null,
-			startDate: film.startDate ?? null,
-			status: film.status ?? null,
-			studio: film.studio ?? null,
-			posterUrl: film.posterUrl ?? null,
-			posterColor: film.posterColor ?? null,
+			...film,
+			// AniList carries no TMDB id. Only the offline mapping can fill this;
+			// null means handleOpenFilm falls back to its title match.
+			tmdbMovieId: null,
 			...anchorFor(film.startDate),
 		}));
 

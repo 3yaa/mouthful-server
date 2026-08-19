@@ -75,7 +75,10 @@ export async function useTmdbTvAPI(req, res) {
 					// a normal open is happy to be served from it
 					forceRefresh: req.query.refresh === "1",
 				});
-				if (chain) {
+				// a chain with no episodic slot has nothing to key progress
+				// on, so the tmdb season list is the better answer -- replacing
+				// it with [] would leave the row unsteppable
+				if (chain?.slots?.length) {
 					const { slots, studio, ...meta } = chain;
 					processedShow.isAnime = true;
 					processedShow.seasons = slots;
