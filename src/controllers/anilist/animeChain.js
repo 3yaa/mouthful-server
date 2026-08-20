@@ -137,6 +137,41 @@ async function fetchNodes(ids) {
 	return out;
 }
 
+// AniList cannot tell a feature-length special that TMDB stocks as a film from
+// one it does not. Hajime no Ippo's "Champion Road" and Attack on Titan's "THE
+// FINAL CHAPTERS" have identical records down to the edge types -- PREQUEL to
+// the series, SEQUEL to the next entry, ADAPTATION to the manga, 90 and 85
+// minutes -- and TMDB carries the first as a movie and has never heard of the
+// second. So ask TMDB, because nothing else can answer.
+//
+// A film row hands over to the movies list, so promoting something TMDB has no
+// entry for can only ever end in "Could Not Find Movie".
+const TMDB_YEAR_SLACK = 1;
+
+async function tmdbMovieFor(title, year) {
+	const key = process.env.TMDB_API_KEY;
+	// no year to check against means no way to reject a bad top hit, and a
+	// wrong film is worse than a side story
+	if (!key || !title || !year) return null;
+
+	const url =
+		`https://api.themoviedb.org/3/search/movie?api_key=${key}` +
+		`&query=${encodeURIComponent(title)}`;
+	const res = await fetch(url);
+	if (!res.ok) return null;
+
+	const { results } = await res.json();
+	// TMDB has already done the fuzzy matching -- "Champion Road" comes back
+	// under its english release title, "Fighting Spirit: Champion Road", which
+	// no string comparison against the anilist label would accept. The release
+	// year is what guards against an unrelated top hit.
+	const hit = (results ?? []).find((r) => {
+		const released = Number(r.release_date?.slice(0, 4));
+		return released && Math.abs(released - year) <= TMDB_YEAR_SLACK;
+	});
+	return hit?.id ?? null;
+}
+
 const fuzzy = (d) =>
 	d?.year ? `${d.year}-${String(d.month ?? 1).padStart(2, "0")}` : null;
 
@@ -688,11 +723,9 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 		: null;
 	const sourceId = sourceEdge?.node?.id;
 
-	// A feature-length special is a film in everything but AniList's label.
-	// Attack on Titan's actual finale was never entered as a MOVIE -- it exists
-	// only as "THE FINAL CHAPTERS" Special 1 and 2, at 61 and 85 minutes, so
-	// the two recap films surfaced while the ending did not. Runtime is what
-	// separates these from the 20-minute shorts that belong in side stories.
+	// Long enough to be a production in its own right rather than a short.
+	// Only isRecap uses this: a recap compiles a whole season, so a 20-minute
+	// OVA is never one however its edges are shaped.
 	const FEATURE_MINUTES = 45;
 	const isFeature = (n) =>
 		n?.format === "MOVIE" ||
@@ -778,10 +811,35 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 
 	const orphanIds = new Set(orphans.flatMap((g) => groups.get(g)));
 
+	// Feature length but not something AniList calls a MOVIE: these are the only
+	// entries whose classification is in doubt, so they are the only ones worth
+	// a TMDB call. A handful per franchise, and the whole chain is cached for a
+	// week behind them.
+	const promotable = Object.values(nodes).filter(
+		(n) =>
+			isFeature(n) &&
+			n.format !== "MOVIE" &&
+			!attached.has(n.id) &&
+			!isRecap(n),
+	);
+	const resolved = await Promise.all(
+		promotable.map(async (n) => {
+			try {
+				return [n.id, await tmdbMovieFor(label(n), n.startDate?.year)];
+			} catch {
+				// a blip must not silently reshape the chain -- unresolved
+				// falls through to side stories, which promise nothing
+				return [n.id, null];
+			}
+		}),
+	);
+	const promoted = new Map(resolved.filter(([, id]) => id != null));
+
+	// An entry AniList already calls a MOVIE stays a film whether or not TMDB
+	// has caught up: an announced sequel with no listing yet is still a film.
+	// Everything else has to earn it.
 	const filmNodes = [
-		...Object.values(nodes).filter(
-			(n) => isFeature(n) && n.format !== "MOVIE",
-		),
+		...promotable.filter((n) => promoted.has(n.id)),
 		...[...orphanIds]
 			.map((id) => nodes[id])
 			.filter((n) => n?.format === "MOVIE"),
@@ -836,9 +894,11 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 		)
 		.map((film) => ({
 			...film,
-			// AniList carries no TMDB id. Only the offline mapping can fill this;
-			// null means handleOpenFilm falls back to its title match.
-			tmdbMovieId: null,
+			// set for anything that had to be looked up to get in here, so the
+			// hand-off is an id rather than another title guess. null on an
+			// entry AniList already called a movie -- handleOpenFilm falls back
+			// to matching on title for those.
+			tmdbMovieId: promoted.get(film.anilistId) ?? null,
 			...anchorFor(film.startDate),
 		}));
 
