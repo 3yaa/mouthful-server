@@ -169,7 +169,40 @@ async function tmdbMovieFor(title, year) {
 		const released = Number(r.release_date?.slice(0, 4));
 		return released && Math.abs(released - year) <= TMDB_YEAR_SLACK;
 	});
-	return hit?.id ?? null;
+	return hit ? { id: hit.id, title: null } : null;
+}
+
+// The label search only works when the two sides call the film the same thing,
+// and sometimes there is no such name. AniList has no entry for Attack on
+// Titan's theatrical finale at all: it knows the two broadcast specials, TMDB
+// knows only the film that compiles them, and it is called "THE LAST ATTACK" --
+// nothing derived from "THE FINAL CHAPTERS Special 2" ever reaches that.
+//
+// What does bridge them is the franchise and the date. Search the show's own
+// title and take an animated film released within a year of the special. The
+// genre filter is load-bearing: the same search returns two live-action Attack
+// on Titan films and a stage musical, one of which is dated inside the window.
+async function tmdbFranchiseFilm(showTitle, year) {
+	const key = process.env.TMDB_API_KEY;
+	if (!key || !showTitle || !year) return null;
+
+	const url =
+		`https://api.themoviedb.org/3/search/movie?api_key=${key}` +
+		`&query=${encodeURIComponent(showTitle)}`;
+	const res = await fetch(url);
+	if (!res.ok) return null;
+
+	const { results } = await res.json();
+	const hit = (results ?? [])
+		.filter((r) => {
+			if (!r.genre_ids?.includes(TMDB_ANIMATION_GENRE)) return false;
+			const released = Number(r.release_date?.slice(0, 4));
+			return released && Math.abs(released - year) <= TMDB_YEAR_SLACK;
+		})
+		.sort((a, z) => a.release_date.localeCompare(z.release_date))[0];
+	// the title comes back too: the row has to say what it would open, and the
+	// special's own name is not it
+	return hit ? { id: hit.id, title: hit.title } : null;
 }
 
 const fuzzy = (d) =>
@@ -824,8 +857,18 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 	);
 	const resolved = await Promise.all(
 		promotable.map(async (n) => {
+			// the entry's own air year, not the show's
+			const airedYear = n.startDate?.year;
+			// tmdb's english name for the show searches better than the native
+			// one; either beats nothing
+			const franchise = fallbackTitle ?? nativeTitle;
 			try {
-				return [n.id, await tmdbMovieFor(label(n), n.startDate?.year)];
+				const direct = await tmdbMovieFor(label(n), airedYear);
+				return [
+					n.id,
+					direct ??
+						(await tmdbFranchiseFilm(franchise, airedYear)),
+				];
 			} catch {
 				// a blip must not silently reshape the chain -- unresolved
 				// falls through to side stories, which promise nothing
@@ -833,7 +876,21 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 			}
 		}),
 	);
-	const promoted = new Map(resolved.filter(([, id]) => id != null));
+
+	// One theatrical cut can compile several broadcast specials -- both halves
+	// of Attack on Titan's finale land on THE LAST ATTACK. Keep the entry
+	// nearest the film's own release and let the rest stay side stories, so the
+	// rail offers the film once rather than twice over.
+	const winners = new Map();
+	for (const [anilistId, hit] of resolved) {
+		if (!hit) continue;
+		const held = winners.get(hit.id);
+		if (!held || sortKey(nodes[anilistId]) > sortKey(nodes[held.anilistId]))
+			winners.set(hit.id, { anilistId, ...hit });
+	}
+	const promoted = new Map(
+		[...winners.values()].map((hit) => [hit.anilistId, hit]),
+	);
 
 	// An entry AniList already calls a MOVIE stays a film whether or not TMDB
 	// has caught up: an announced sequel with no listing yet is still a film.
@@ -898,7 +955,11 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 			// hand-off is an id rather than another title guess. null on an
 			// entry AniList already called a movie -- handleOpenFilm falls back
 			// to matching on title for those.
-			tmdbMovieId: promoted.get(film.anilistId) ?? null,
+			tmdbMovieId: promoted.get(film.anilistId)?.id ?? null,
+			// only the franchise fallback carries a title, and it does so
+			// because the anilist label names the broadcast special rather than
+			// the film the row opens
+			label: promoted.get(film.anilistId)?.title ?? film.label,
 			...anchorFor(film.startDate),
 		}));
 
