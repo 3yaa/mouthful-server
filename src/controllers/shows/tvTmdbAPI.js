@@ -9,6 +9,12 @@ export async function useTmdbTvAPI(req, res) {
 		const tmdbId = req.query.tmdbId;
 		// "1"/"0" from the add-modal toggle -- overrides detection either way
 		const forceAnime = req.query.forceAnime;
+		// anilist ids of the cuts the user has picked for their part -- the
+		// Mugen Train film standing in for the Mugen Train Arc cour, say
+		const preferredCuts = String(req.query.cuts ?? "")
+			.split(",")
+			.map((id) => parseInt(id, 10))
+			.filter(Number.isInteger);
 		const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids,images,keywords&include_image_language=en,null`;
 		// make call
 		const response = await fetch(url);
@@ -71,6 +77,7 @@ export async function useTmdbTvAPI(req, res) {
 					fallbackTitle: show.name,
 					year:
 						parseInt(show.first_air_date?.slice(0, 4)) || undefined,
+					preferredCuts,
 					// an explicit refresh bypasses the assembled-chain cache;
 					// a normal open is happy to be served from it
 					forceRefresh: req.query.refresh === "1",

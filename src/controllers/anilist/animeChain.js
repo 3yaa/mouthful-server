@@ -507,7 +507,7 @@ function reachableFrom(nodes, rootId) {
 	return seen;
 }
 
-function buildSpine(nodes, groups, rootGroup, reachable) {
+function buildSpine(nodes, groups, rootGroup, reachable, preferred) {
 	const groupOf = new Map();
 	for (const [root, members] of groups)
 		for (const id of members) groupOf.set(id, root);
@@ -541,6 +541,14 @@ function buildSpine(nodes, groups, rootGroup, reachable) {
 			.get(g)
 			.map((id) => nodes[id])
 			.filter(Boolean);
+		// An explicit pick wins outright. Saying "I watched the film" is a
+		// statement about which cut of this part you are tracking, and when the
+		// pick is a movie the whole group leaves the spine below and comes back
+		// as a film row -- a film is not a position the episode stepper lands
+		// on, whichever way it got here.
+		const picked = members.find((m) => preferred?.has(m.id));
+		if (picked) return picked;
+
 		const tv = members.filter((m) => m.format !== "MOVIE");
 		const pool = tv.length ? tv : members;
 		return [...pool].sort(
@@ -671,7 +679,14 @@ function applyNumbers(slots) {
 	}
 }
 
-async function buildChain({ nativeTitle, fallbackTitle, year }) {
+async function buildChain({
+	nativeTitle,
+	fallbackTitle,
+	year,
+	preferredCuts,
+}) {
+	// anilist ids the user has picked as the cut they watch for their part
+	const preferred = new Set(preferredCuts ?? []);
 	const root = await resolveRoot(nativeTitle, fallbackTitle, year);
 	if (!root) return null;
 
@@ -720,6 +735,7 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 		groups,
 		rootGroup,
 		reachable,
+		preferred,
 	);
 
 	const slots = ordered.map((group) => {
@@ -743,6 +759,11 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 			variants: others,
 		};
 	});
+
+	// A picked cut leaves the spine, and the cuts it was picked over have to
+	// travel with it -- otherwise choosing the film strands you there with no
+	// way back to the cour.
+	const cutsBySlotId = new Map(slots.map((s) => [s.anilistId, s.variants]));
 
 	// the manga/novel the anime adapts. The edge is skinny now, so the title
 	// comes from the batched print record.
@@ -956,6 +977,9 @@ async function buildChain({ nativeTitle, fallbackTitle, year }) {
 			// entry AniList already called a movie -- handleOpenFilm falls back
 			// to matching on title for those.
 			tmdbMovieId: promoted.get(film.anilistId)?.id ?? null,
+			// empty for a film that was always a film; populated for one that
+			// is a part you chose to watch as a film
+			variants: cutsBySlotId.get(film.anilistId) ?? [],
 			// only the franchise fallback carries a title, and it does so
 			// because the anilist label names the broadcast special rather than
 			// the film the row opens
@@ -997,12 +1021,16 @@ export async function buildAnimeChain({
 	nativeTitle,
 	fallbackTitle,
 	year,
+	preferredCuts,
 	forceRefresh = false,
 }) {
+	// sorted: the same picks in a different order are the same chain
+	const cuts = [...new Set(preferredCuts ?? [])].sort((a, z) => a - z);
 	const key = JSON.stringify([
 		nativeTitle ?? null,
 		fallbackTitle ?? null,
 		year ?? null,
+		cuts,
 	]);
 	const hit = chainCache.get(key);
 	if (!forceRefresh && hit && hit.expires > Date.now()) {
@@ -1011,7 +1039,12 @@ export async function buildAnimeChain({
 		return structuredClone(hit.chain);
 	}
 
-	const chain = await buildChain({ nativeTitle, fallbackTitle, year });
+	const chain = await buildChain({
+		nativeTitle,
+		fallbackTitle,
+		year,
+		preferredCuts: cuts,
+	});
 	if (!chain) return null;
 
 	// lets the caller decide when a stored chain is stale enough to rebuild
