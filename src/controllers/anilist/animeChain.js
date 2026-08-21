@@ -522,8 +522,11 @@ async function grow(nodes, prints) {
 //
 //   FMA 2003 vs Brotherhood     6 years apart, 1224 vs 1536 min   -> two rows
 //   HxH 1999 vs 2011            12 years apart                    -> two rows
-//   Madoka TV vs the films      1 year apart, TV vs MOVIE         -> one slot
 //   a trimmed broadcast recut   same year, ~60% runtime            -> one slot
+//
+// A film against the run it condenses used to collapse here too, as a cut of
+// that part. It does not any more -- see isCompilation, which takes it out of
+// the graph before grouping ever sees it.
 //
 // A remake is a fresh production years later, and the user finds it by entering
 // its year -- it deserves its own show record with its own progress and score.
@@ -782,13 +785,56 @@ function applyNumbers(slots) {
 // a recap can never become a part -- but the edge is right there in the payload
 // and states what the heuristic can only infer. One Piece Log is a 21-episode
 // TV recap, which no runtime rule would ever catch.
+//
+// A compilation film is a season cut down to two hours, and AniList files it as
+// ALTERNATIVE to the run it condenses rather than declaring it a SUMMARY -- so
+// the declaration above misses it and no runtime rule catches it either: Attack
+// on Titan's first two films carry the show's own manga as their source and no
+// PARENT edge at all. What gives them away is the shape of the edge: a film
+// alternative to an episodic run that aired alongside it.
+//
+// It is a substitute for having watched the part, exactly like a declared
+// recap, so it leaves the same way -- not a part, not a cut of one, not a film
+// row of its own.
+//
+// Runtime decides which side of the pair is the condensation, and it has to:
+// Mugen Train is a real film that was later recut into seven episodes, and it
+// wears the same ALTERNATIVE edge. The film is the compilation only when it is
+// a fraction of the run it points at.
+//
+//   AoT: Crimson Bow and Arrow   118 min vs 25x25   0.19  -> compilation
+//   Madoka: Beginnings           130 min vs 12x24   0.45  -> compilation
+//   Demon Slayer: Mugen Train    117 min vs 7x24    0.70  -> a film, kept
+const isCompilation = (nodes, n) => {
+	if (n?.format !== "MOVIE") return false;
+	const year = n.startDate?.year;
+	// no date is no way to tell a condensation from a remake years later
+	if (!year) return false;
+	const runtime = totalMinutes(n);
+	if (!runtime) return false;
+
+	for (const edge of n.relations?.edges ?? []) {
+		if (edge.relationType !== "ALTERNATIVE") continue;
+		const other = nodes[edge.node?.id];
+		const otherYear = other?.startDate?.year;
+		if (!other || other.format === "MOVIE" || !otherYear) continue;
+		if (Math.abs(year - otherYear) > REMAKE_GAP_YEARS) continue;
+		const full = totalMinutes(other);
+		// an unmeasurable counterpart is no evidence -- keep the film
+		if (full && runtime / full <= RECUT_RUNTIME_RATIO) return true;
+	}
+	return false;
+};
+
 function collectSummarised(nodes) {
 	const out = new Set();
-	for (const node of Object.values(nodes))
+	for (const node of Object.values(nodes)) {
 		for (const edge of node.relations?.edges ?? []) {
 			if (edge.relationType !== "SUMMARY") continue;
 			if (edge.node?.type === "ANIME") out.add(edge.node.id);
 		}
+		if (isCompilation(nodes, node)) out.add(node.id);
+	}
 	return out;
 }
 
@@ -950,9 +996,17 @@ function assembleChain(graph, preferred) {
 	// carry.
 	const isShortForm = (n) => n.format === "ONA" && n.episodes === 1;
 
+	// A recap is not a part and not a way to watch one, so it never enters the
+	// grouping: excluded here it can be neither a slot nor a cut offered under
+	// one, and films and side stories filter it again below.
 	const mainIds = new Set(
 		Object.values(nodes)
-			.filter((n) => MAIN_FORMATS.includes(n.format) && !isShortForm(n))
+			.filter(
+				(n) =>
+					MAIN_FORMATS.includes(n.format) &&
+					!isShortForm(n) &&
+					!isSummary(n),
+			)
 			.map((n) => n.id),
 	);
 	mainIds.add(root.id);
