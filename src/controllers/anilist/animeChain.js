@@ -293,6 +293,35 @@ const isFeature = (n) =>
 		(n?.duration ?? 0) >= FEATURE_MINUTES &&
 		(n?.episodes ?? 1) <= 1);
 
+// A feature-length special that carries the broadcast on rather than hanging
+// off it -- and AniList draws that line plainly, which is the only reason this
+// is decidable at all. A bonus carries PARENT to the season it belongs to:
+//
+//   Chimi Kyara Gekijou    PARENT -> The Final Season
+//
+// while Attack on Titan's Final Chapters carry no PARENT at all, and instead
+// sit in the story's own chain:
+//
+//   FINAL CHAPTERS 1       PREQUEL -> Final Season Part 2, SEQUEL -> CHAPTERS 2
+//   FINAL CHAPTERS 2       PREQUEL -> CHAPTERS 1
+//
+// They are the ending of the story, aired as specials, and they must never be
+// promoted to films. AniList has no entry for the theatrical cut of the pair,
+// so a title lookup finds TMDB's "THE LAST ATTACK" -- one film of both halves --
+// and hands it back for the half that matched. The chain then carried a summary
+// of two specials as a film row, with one of those specials still sitting two
+// rows above it. Wrong three ways over: not a film, not that film, and a
+// summary either way.
+const continuesBroadcast = (n) => {
+	const edges = n?.relations?.edges ?? [];
+	if (edges.some((e) => e.relationType === "PARENT")) return false;
+	return edges.some(
+		(e) =>
+			["PREQUEL", "SEQUEL"].includes(e.relationType) &&
+			e.node?.type === "ANIME",
+	);
+};
+
 // A recap compiles episodes rather than telling its own story, so it hangs
 // off the seasons it covers (PARENT) and adapts nothing. An original film
 // adapts a print work -- every My Hero Academia film has a tie-in novel --
@@ -852,7 +881,11 @@ async function resolvePromotions(nodes, isSummary, franchise) {
 	const search = tmdbSearcher();
 
 	const promotable = Object.values(nodes).filter(
-		(n) => isFeature(n) && n.format !== "MOVIE" && !isSummary(n),
+		(n) =>
+			isFeature(n) &&
+			n.format !== "MOVIE" &&
+			!isSummary(n) &&
+			!continuesBroadcast(n),
 	);
 
 	const resolved = await Promise.all(
