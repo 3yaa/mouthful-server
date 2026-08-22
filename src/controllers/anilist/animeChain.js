@@ -1051,12 +1051,22 @@ function assembleChain(graph, preferred) {
 	// way back to the cour.
 	const cutsBySlotId = new Map(slots.map((s) => [s.anilistId, s.variants]));
 
-	// Films leave the slot array entirely. A film is watched in one sitting and
-	// scored in the movies list, so it is not a position the episode stepper
-	// should ever land on -- it is a pointer that says "this comes next, open it
-	// over there". Slots stay purely episodic.
-	const movieSlots = slots.filter((s) => s.isMovie);
-	const episodic = slots.filter((s) => !s.isMovie);
+	// A film that was always a film leaves the slot array entirely: it is
+	// watched in one sitting and scored in the movies list, so it is not a
+	// position the episode stepper should ever land on -- it is a pointer that
+	// says "this comes next, open it over there".
+	//
+	// A part you chose to watch as a film is a different thing wearing the same
+	// format, and it stays. It is one installment of the chain either way, and
+	// which cut you watch it in cannot be what decides whether it is one: as a
+	// cour Mugen Train sat on the line in its own place, and picking the film
+	// turned that same installment into a pointer hanging off the part before
+	// it -- demoted to a footnote of its predecessor by a choice that was never
+	// about where it belongs. Having cuts to be chosen between is exactly what
+	// tells the two cases apart: a film that was never anything else has none.
+	const isChosenCut = (s) => !!s.variants?.length;
+	const movieSlots = slots.filter((s) => s.isMovie && !isChosenCut(s));
+	const episodic = slots.filter((s) => !s.isMovie || isChosenCut(s));
 	slots.length = 0;
 	slots.push(...episodic);
 	applyNumbers(slots);

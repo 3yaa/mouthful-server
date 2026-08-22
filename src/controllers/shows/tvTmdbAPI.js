@@ -7,7 +7,7 @@ dotenv.config();
 export async function useTmdbTvAPI(req, res) {
 	try {
 		const tmdbId = req.query.tmdbId;
-		// "1"/"0" from the add-modal toggle -- overrides detection either way
+		// "1"/"0" for anime toggle
 		const forceAnime = req.query.forceAnime;
 		// anilist ids of the cuts the user has picked for their part -- the
 		// Mugen Train film standing in for the Mugen Train Arc cour, say

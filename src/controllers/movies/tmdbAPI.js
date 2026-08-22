@@ -109,9 +109,14 @@ export async function useMovieTmdbAPI(req, res) {
 			!isReload &&
 			(await checkDuplicate("movies", "tmdb_id", tmdbId, userId))
 		) {
+			// the ids go with it: a caller that reached this by handing over a
+			// film from a show cannot match the row it already owns on title
+			// alone -- anilist names the film one thing and tmdb another -- and
+			// an id is what lets it open the row instead of reporting a wall
 			return res.status(409).json({
 				success: false,
 				title: match.title,
+				tmdbId,
 				message: `Movie "${match.title}" already in your library`,
 				error: "Duplicate found",
 			});
@@ -136,6 +141,8 @@ export async function useMovieTmdbAPI(req, res) {
 			return res.status(409).json({
 				success: false,
 				title: match.title,
+				tmdbId,
+				imdbId,
 				message: `Movie "${match.title}" already in your library -- via imdbId`,
 				error: "Duplicate found",
 			});
