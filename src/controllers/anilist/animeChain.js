@@ -1080,6 +1080,15 @@ function assembleChain(graph, preferred) {
 	const filmIds = new Set(filmNodes.map((f) => f.anilistId ?? f.id));
 	for (const id of filmIds) orphanIds.delete(id);
 
+	// Which of them the story actually runs through. All three sources above
+	// produce films, and only one of them produces continuations: a film that
+	// came off the spine walk is an installment -- Mugen Train, Infinity Castle
+	// -- while the promoted and orphaned ones were found hanging off a season or
+	// a tie-in novel, which is what My Hero Academia's films are. Both stay
+	// films here, because being a continuation does not make a film something
+	// you track episodes of; the difference is where the chain draws it.
+	const spineFilmIds = new Set(movieSlots.map((s) => s.anilistId));
+
 	// anchored to the slot they aired after, by id -- position is recomputed on
 	// every rebuild and must never be persisted as a reference
 	// afterSlot is the display number and afterSlotAnilistId the durable
@@ -1130,6 +1139,8 @@ function assembleChain(graph, preferred) {
 			// empty for a film that was always a film; populated for one that
 			// is a part you chose to watch as a film
 			variants: cutsBySlotId.get(film.anilistId) ?? [],
+			// the story runs through this one rather than off to the side of it
+			isMainline: spineFilmIds.has(film.anilistId),
 			// only the franchise fallback carries a title, and it does so
 			// because the anilist label names the broadcast special rather than
 			// the film the row opens
