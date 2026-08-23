@@ -91,6 +91,12 @@ export const validateShowPatch = (req, res, next) => {
     "dateCompleted",
     "curSeasonIndex",
     "curEpisode",
+    // Decisions the user makes about the row, which live in the same jsonb the
+    // chain does: which cut of a part they watch, which side entries they have
+    // said no to, which poster the row wears. The chain itself is only ever
+    // rebuilt through the refresh route below, which is what keeps this from
+    // being a way to write source metadata by hand.
+    "anilistMeta",
   ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
