@@ -65,6 +65,7 @@ export async function useTmdbEnrichAPI(tmdbId) {
 
 	return {
 		title: show.name,
+		originalTitle: show.original_name ?? null,
 		processedShow,
 		wantAnime: isAnime(show),
 	};

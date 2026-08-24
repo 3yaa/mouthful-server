@@ -77,9 +77,30 @@ export async function anilistQuery(query, variables = {}) {
 //  "Steins;Gate" and "steins gate" compare equal
 const normalise = (s) =>
 	(s ?? "")
+		// Decompose first, then drop the combining marks. TMDB writes macrons
+		// where AniList spells the vowel out -- "Naruto Shippuden" with a u-macron
+		// against "NARUTO: Shippuuden" -- and stripping the mark along with the
+		// punctuation took the whole letter with it ("narutoshippden"), so the two
+		// sides stopped matching and the show resolved to nothing. Kana keep their
+		// voiced-sound marks: those decompose into the same range both sides are
+		// normalised through, so they still compare equal.
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
 		.toLowerCase()
 		.replace(/[^a-z0-9぀-ヿ一-鿿]+/g, "")
 		.trim();
+
+// An exact title, which is a far stronger signal than the substring rule below
+// and so is worth preferring when both are on offer. Searching for a series by
+// a name a film also carries -- "Naruto Shippuden" is inside "Naruto Shippuden
+// the Movie: Blood Prison" -- otherwise resolves to whichever SEARCH_MATCH
+// ranked first, and a film has no seasons to walk.
+export function titleEquals(query, titles) {
+	const q = normalise(query);
+	if (!q) return false;
+
+	return (titles ?? []).filter(Boolean).some((t) => normalise(t) === q);
+}
 
 // guards against AniList's loose SEARCH_MATCH
 export function titleMatches(query, titles) {

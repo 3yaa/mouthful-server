@@ -32,7 +32,12 @@ export async function useShowEnrichAPI(req, res) {
 			});
 		}
 		//
-		const { title, processedShow, wantAnime: tmdbSaysAnime } = result;
+		const {
+			title,
+			originalTitle,
+			processedShow,
+			wantAnime: tmdbSaysAnime,
+		} = result;
 
 		// run anilist
 		const wantsAnime =
@@ -40,6 +45,7 @@ export async function useShowEnrichAPI(req, res) {
 		if (wantsAnime) {
 			try {
 				const chain = await buildAnimeChain({
+					nativeTitle: originalTitle,
 					title,
 					year: processedShow.released_date,
 					preferredCuts,
@@ -48,11 +54,12 @@ export async function useShowEnrichAPI(req, res) {
 				});
 				// no episodic slot -> use tmdb season list
 				if (chain?.slots?.length) {
-					// anime want studio
 					const { slots, studio, ...meta } = chain;
 					processedShow.isAnime = true;
 					processedShow.seasons = slots;
 					Object.assign(processedShow, meta);
+					// anime uses studio names
+					if (studio) processedShow.creator = studio;
 					// anilist's cover joins the rest of the posters
 					const cover = slots[0]?.posterUrl;
 					if (cover && !processedShow.posters.includes(cover)) {

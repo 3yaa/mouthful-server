@@ -1,4 +1,4 @@
-import { anilistQuery, titleMatches } from "./anilistClient.js";
+import { anilistQuery, titleEquals, titleMatches } from "./anilistClient.js";
 
 // TMDB's only job is deciding whether to run at all
 const TMDB_ANIME_KEYWORD = 210024;
@@ -43,6 +43,15 @@ const ROOT_FRAGMENT = `fragment Root on Media {
 	} } }
 }`;
 
+// SEARCH_MATCH does not reliably rank the main entry first. TMDB's name for
+// Frieren -- "Frieren: Beyond Journey's End" -- puts a bonus short on top and
+// the series itself second, so taking only the top hit meant titleMatches
+// rejected the short, resolveRoot returned null, and the whole chain came back
+// null: no slots, no studio, an anime row that never knew it was one. Take a
+// few candidates and let titleMatches choose. Well inside AniList's complexity
+// budget even with Root's relations on every candidate.
+const ROOT_CANDIDATES = 5;
+
 // The fallback search variants go out as aliases in one query instead of up to
 // three sequential round trips. A miss used to cost three; now it costs one.
 // Built dynamically because a null `search` is not "no search" to AniList -- it
@@ -52,7 +61,7 @@ function resolveQuery(variants) {
 		.map((v, i) => `$s${i}: String!${v.year ? `, $y${i}: Int` : ""}`)
 		.join(", ");
 	const aliases = variants.map(
-		(v, i) => `v${i}: Page(perPage: 1) {
+		(v, i) => `v${i}: Page(perPage: ${ROOT_CANDIDATES}) {
 			media(
 				type: ANIME
 				search: $s${i}${v.year ? `\n\t\t\t\tseasonYear: $y${i}` : ""}
@@ -346,18 +355,29 @@ const isRecap = (n, sourceId) => {
 };
 
 // resolves the entry the user actually searched for
-async function resolveRoot(title, year) {
+// `fallbackTitle` is tmdb's english name. It is only ever the second choice
+// here -- the caller keeps calling it `title` because the same string is the
+// first choice for the tmdb film searches in resolvePromotions.
+async function resolveRoot(nativeTitle, fallbackTitle, year) {
 	const variants = [];
 	// normalised: an undefined year and a null year are the same query, and the
 	// dedupe below compares by value
 	const y = year ?? null;
+	// The native title leads. It is the same untranslated string AniList stores
+	// as title.native, so matching it is an identity check, where an english
+	// name is each database's own localisation call -- tmdb's "Naruto Shippuden"
+	// against anilist's "NARUTO: Shippuuden" matched nothing at all, and tmdb's
+	// name for Frieren ranked the series second behind a bonus short. English
+	// stays as the fallback for the entries tmdb never gave a native title.
 	for (const v of [
-		{ search: title, year: y },
-		{ search: title, year: null },
+		{ search: nativeTitle, year: y },
+		{ search: nativeTitle, year: null },
+		{ search: fallbackTitle, year: y },
+		{ search: fallbackTitle, year: null },
 	]) {
 		if (!v.search) continue;
 		// original_name and name are the same string on most English-titled
-		// shows, and a missing year collapses the first pair
+		// shows, and a missing year collapses each pair
 		if (variants.some((x) => x.search === v.search && x.year === v.year))
 			continue;
 		variants.push(v);
@@ -372,16 +392,26 @@ async function resolveRoot(title, year) {
 
 	const data = await anilistQuery(resolveQuery(variants), variables);
 
-	// same precedence the sequential fallback chain had
+	// same precedence the sequential fallback chain had -- a variant is scanned
+	// out before the next one is considered, so the year-filtered search still
+	// wins over the bare one, and the native title still wins over the english
+	// name. Within one variant an exact title beats a merely-containing one at
+	// any rank: SEARCH_MATCH happily puts a film whose name contains the show's
+	// above the show, and a film brings no seasons with it.
 	for (let i = 0; i < variants.length; i++) {
-		const media = data?.[`v${i}`]?.media?.[0];
-		if (!media) continue;
-		const titles = [
-			media.title?.romaji,
-			media.title?.english,
-			media.title?.native,
-		];
-		if (titleMatches(variants[i].search, titles)) return media;
+		const candidates = (data?.[`v${i}`]?.media ?? []).map((media) => [
+			media,
+			[media.title?.romaji, media.title?.english, media.title?.native],
+		]);
+		const search = variants[i].search;
+		const exact = candidates.find(([, titles]) =>
+			titleEquals(search, titles),
+		);
+		if (exact) return exact[0];
+		const loose = candidates.find(([, titles]) =>
+			titleMatches(search, titles),
+		);
+		if (loose) return loose[0];
 	}
 	return null;
 }
@@ -922,15 +952,17 @@ const GRAPH_TTL = 7 * 24 * 60 * 60 * 1000;
 const GRAPH_CACHE_MAX = 300;
 const graphCache = new Map();
 
-async function fetchGraph({ title, year, forceRefresh }) {
-	const key = JSON.stringify([title ?? null, year ?? null]);
+async function fetchGraph({ title, nativeTitle, year, forceRefresh }) {
+	// both titles are in the key: they resolve independently, so a graph built
+	// from one must not be handed to a request that only carried the other
+	const key = JSON.stringify([title ?? null, nativeTitle ?? null, year ?? null]);
 	const hit = graphCache.get(key);
 	// handed out by reference: assembly reads these records and builds fresh
 	// objects out of them via shape(), never writing back. nodeCache already
 	// shares node objects between builds for the same reason.
 	if (!forceRefresh && hit && hit.expires > Date.now()) return hit.graph;
 
-	const root = await resolveRoot(title, year);
+	const root = await resolveRoot(nativeTitle, title, year);
 	if (!root) return null;
 
 	// One batch covers the entire discovered graph -- relations included, so
@@ -1198,13 +1230,19 @@ const chainCache = new Map();
 
 export async function buildAnimeChain({
 	title,
+	nativeTitle,
 	year,
 	preferredCuts,
 	forceRefresh = false,
 }) {
 	// same picks in a different order are same chain
 	const cuts = [...new Set(preferredCuts ?? [])].sort((a, z) => a - z);
-	const key = JSON.stringify([title ?? null, year ?? null, cuts]);
+	const key = JSON.stringify([
+		title ?? null,
+		nativeTitle ?? null,
+		year ?? null,
+		cuts,
+	]);
 	const hit = chainCache.get(key);
 	if (!forceRefresh && hit && hit.expires > Date.now()) {
 		// deep copy of hit
@@ -1214,6 +1252,7 @@ export async function buildAnimeChain({
 	// make a fresh call
 	const graph = await fetchGraph({
 		title,
+		nativeTitle,
 		year,
 		forceRefresh,
 	});
