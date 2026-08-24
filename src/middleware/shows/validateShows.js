@@ -135,7 +135,7 @@ export const validateShowRefresh = (req, res, next) => {
     "posterUrl",
     "backdropUrl",
     "logoUrl",
-    "studio",
+    "creator",
     "seasons",
     "curSeasonIndex",
     "curEpisode",

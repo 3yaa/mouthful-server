@@ -4,7 +4,7 @@ const convertShowToCamelCase = (show) => ({
 	id: show.id,
 	dateCreated: show.date_created,
 	title: show.title,
-	studio: show.studio,
+	creator: show.creator,
 	posterUrl: show.poster_url,
 	backdropUrl: show.backdrop_url,
 	logoUrl: show.logo_url,
@@ -155,7 +155,7 @@ export const getShow = async (req, res) => {
 // any request-body key become a column name in the SET clause.
 const COLUMNS = {
 	title: "title",
-	studio: "studio",
+	creator: "creator",
 	posterUrl: "poster_url",
 	backdropUrl: "backdrop_url",
 	logoUrl: "logo_url",
@@ -285,7 +285,7 @@ export const createShow = async (req, res) => {
 		const userId = req.user.id;
 		const {
 			title,
-			studio,
+			creator,
 			posterUrl,
 			backdropUrl,
 			logoUrl,
@@ -311,7 +311,7 @@ export const createShow = async (req, res) => {
 		const query = `
     INSERT INTO shows (
       title,
-      studio,
+      creator,
       poster_url,
       backdrop_url,
       logo_url,
@@ -335,7 +335,7 @@ export const createShow = async (req, res) => {
   `;
 		const values = [
 			title,
-			studio,
+			creator,
 			posterUrl,
 			backdropUrl,
 			logoUrl ?? null,

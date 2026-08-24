@@ -16,19 +16,6 @@ const SLOT_FORMATS = [...MAIN_FORMATS, ...SIDE_FORMATS];
 // something off it
 const SPINE_RELATIONS = ["SEQUEL", "PREQUEL"];
 
-// genre+origin
-export function isAnime(tmdbDetail) {
-	const genres = (tmdbDetail?.genres ?? []).map((g) => g.id);
-	const keywords = (tmdbDetail?.keywords?.results ?? []).map((k) => k.id);
-	if (keywords.includes(TMDB_ANIME_KEYWORD)) return true;
-
-	const origins = tmdbDetail?.origin_country ?? [];
-	return (
-		genres.includes(TMDB_ANIMATION_GENRE) &&
-		origins.some((c) => ANIME_ORIGINS.includes(c))
-	);
-}
-
 // studios ride along per entry: the production house genuinely changes between
 // seasons, which is the whole reason metadata is stored per slot
 const MEDIA_FIELDS = `
@@ -359,15 +346,14 @@ const isRecap = (n, sourceId) => {
 };
 
 // resolves the entry the user actually searched for
-async function resolveRoot(nativeTitle, fallbackTitle, year) {
+async function resolveRoot(title, year) {
 	const variants = [];
 	// normalised: an undefined year and a null year are the same query, and the
 	// dedupe below compares by value
 	const y = year ?? null;
 	for (const v of [
-		{ search: nativeTitle, year: y },
-		{ search: nativeTitle, year: null },
-		{ search: fallbackTitle, year: y },
+		{ search: title, year: y },
+		{ search: title, year: null },
 	]) {
 		if (!v.search) continue;
 		// original_name and name are the same string on most English-titled
@@ -936,19 +922,15 @@ const GRAPH_TTL = 7 * 24 * 60 * 60 * 1000;
 const GRAPH_CACHE_MAX = 300;
 const graphCache = new Map();
 
-async function fetchGraph({ nativeTitle, fallbackTitle, year, forceRefresh }) {
-	const key = JSON.stringify([
-		nativeTitle ?? null,
-		fallbackTitle ?? null,
-		year ?? null,
-	]);
+async function fetchGraph({ title, year, forceRefresh }) {
+	const key = JSON.stringify([title ?? null, year ?? null]);
 	const hit = graphCache.get(key);
 	// handed out by reference: assembly reads these records and builds fresh
 	// objects out of them via shape(), never writing back. nodeCache already
 	// shares node objects between builds for the same reason.
 	if (!forceRefresh && hit && hit.expires > Date.now()) return hit.graph;
 
-	const root = await resolveRoot(nativeTitle, fallbackTitle, year);
+	const root = await resolveRoot(title, year);
 	if (!root) return null;
 
 	// One batch covers the entire discovered graph -- relations included, so
@@ -983,13 +965,12 @@ async function fetchGraph({ nativeTitle, fallbackTitle, year, forceRefresh }) {
 	const summarised = collectSummarised(nodes);
 	const isSummary = summaryTest(nodes, summarised, sourceId);
 
-
 	// tmdb's english name for the show searches better than the native one;
 	// either beats nothing
 	const { promotable, promoted } = await resolvePromotions(
 		nodes,
 		isSummary,
-		fallbackTitle ?? nativeTitle,
+		title,
 	);
 
 	const graph = {
@@ -1216,42 +1197,32 @@ const CHAIN_CACHE_MAX = 300;
 const chainCache = new Map();
 
 export async function buildAnimeChain({
-	nativeTitle,
-	fallbackTitle,
+	title,
 	year,
 	preferredCuts,
 	forceRefresh = false,
 }) {
-	// sorted: the same picks in a different order are the same chain
+	// same picks in a different order are same chain
 	const cuts = [...new Set(preferredCuts ?? [])].sort((a, z) => a - z);
-	const key = JSON.stringify([
-		nativeTitle ?? null,
-		fallbackTitle ?? null,
-		year ?? null,
-		cuts,
-	]);
+	const key = JSON.stringify([title ?? null, year ?? null, cuts]);
 	const hit = chainCache.get(key);
 	if (!forceRefresh && hit && hit.expires > Date.now()) {
-		// cloned: callers destructure and reassign, and one of them mutating a
-		// shared slot array would corrupt every later read
+		// deep copy of hit
 		return structuredClone(hit.chain);
 	}
 
+	// make a fresh call
 	const graph = await fetchGraph({
-		nativeTitle,
-		fallbackTitle,
+		title,
 		year,
 		forceRefresh,
 	});
 	if (!graph) return null;
-
-	// anilist ids the user has picked as the cut they watch for their part
+	// timeline chain
 	const chain = assembleChain(graph, new Set(cuts));
-
-	// lets the caller decide when a stored chain is stale enough to rebuild
 	chain.chainFetchedAt = new Date().toISOString();
 	chainCache.set(key, { chain, expires: Date.now() + CHAIN_TTL });
-
+	// remove hanging caches
 	if (chainCache.size > CHAIN_CACHE_MAX) {
 		const now = Date.now();
 		for (const [k, v] of chainCache)

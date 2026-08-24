@@ -1,6 +1,6 @@
 import express from "express";
-import { useTmdbSearchAPI } from "../../controllers/shows/searchTmdbAPI.js";
-import { useTmdbTvAPI } from "../../controllers/shows/tvTmdbAPI.js";
+import { useTmdbIdAPI } from "../../controllers/shows/tmdbIdAPI.js";
+import { useShowEnrichAPI } from "../../controllers/shows/showEnrichAPI.js";
 import {
 	validateShowRatingAPI,
 	validateShowsAPI,
@@ -12,13 +12,17 @@ import { useOmdbEpisodeRatings } from "../../controllers/shows/showEpisodeRating
 
 const showsAPIRouter = express.Router();
 
-showsAPIRouter.get("/tmdb", validateShowsAPI, useTmdbSearchAPI);
-showsAPIRouter.get("/tmdb-tv", validateTMDBIdAPI, useTmdbTvAPI);
+showsAPIRouter.get("/tmdb", validateShowsAPI, useTmdbIdAPI);
+showsAPIRouter.get("/tmdb-tv", validateTMDBIdAPI, useShowEnrichAPI);
 showsAPIRouter.get(
 	"/tmdb-tv-discover",
 	validateShowsDiscoverAPI,
 	useTmdbTvDiscoverAPI,
 );
-showsAPIRouter.get("/episodes-score", validateShowRatingAPI, useOmdbEpisodeRatings);
+showsAPIRouter.get(
+	"/episodes-score",
+	validateShowRatingAPI,
+	useOmdbEpisodeRatings,
+);
 
 export { showsAPIRouter };
