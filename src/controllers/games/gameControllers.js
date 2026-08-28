@@ -127,14 +127,22 @@ export const getGame = async (req, res) => {
 	}
 };
 
-const camelToSnakeMapping = {
-	dateCompleted: "date_completed",
-	lastUpdated: "last_updated",
+const COLUMNS = {
+	title: "title",
+	studio: "studio",
+	cover: "cover",
 	backdropUrl: "backdrop_url",
 	logoUrl: "logo_url",
 	dateReleased: "date_released",
 	mainTitle: "main_title",
 	dlcIndex: "dlc_index",
+	dlcs: "dlcs",
+	status: "status",
+	score_mu: "score_mu",
+	score_phi: "score_phi",
+	dateCompleted: "date_completed",
+	lastUpdated: "last_updated",
+	note: "note",
 	igdbId: "igdb_id",
 };
 
@@ -166,15 +174,18 @@ export const patchGame = async (req, res) => {
 				updates.dlcs === null ? null : JSON.stringify(updates.dlcs);
 		}
 
-		// breaks all the keys into key=$i
-		const setClause = Object.keys(updates)
-			.map((key, index) => {
-				const columnName = camelToSnakeMapping[key] || key;
-				return `${columnName}=$${index + 1}`;
-			})
+		const keys = Object.keys(updates).filter((key) => COLUMNS[key]);
+		if (!keys.length) {
+			return res.status(400).json({
+				success: false,
+				message: "No updatable fields provided",
+			});
+		}
+
+		const setClause = keys
+			.map((key, index) => `${COLUMNS[key]}=$${index + 1}`)
 			.join(", ");
-		// gets all the values of the keys
-		const values = Object.values(updates);
+		const values = keys.map((key) => updates[key]);
 		values.push(gameId);
 		values.push(userId);
 
@@ -316,15 +327,6 @@ export const deleteGame = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error deleting game: ", error);
-
-		// Handle foreign key constraints
-		if (error.code === "23503") {
-			return res.status(400).json({
-				success: false,
-				message:
-					"Cannot delete game because it is referenced by other records",
-			});
-		}
 
 		res.status(500).json({
 			success: false,

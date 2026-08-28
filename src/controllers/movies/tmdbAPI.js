@@ -192,7 +192,7 @@ export async function useMovieTmdbAPI(req, res) {
 }
 
 // used for reload
-export async function useMovieTmdbByIdAPI(req, res) {
+export async function useMovieTmdbRefreshAPI(req, res) {
 	try {
 		const tmdbId = req.query.tmdbId;
 
@@ -228,7 +228,7 @@ export async function useMovieTmdbByIdAPI(req, res) {
 			},
 		});
 	} catch (error) {
-		console.error("TMDB movie by id failed: ", error);
+		console.error("TMDB movie refresh failed: ", error);
 		res.status(error.status ? error.status : 500).json({
 			success: false,
 			message: "Failed to fetch movie from TMDB",

@@ -265,7 +265,7 @@ function shape(n) {
 }
 
 // films and side stories, per AnimeExtraProps. averageScore lives here rather
-// than on slots: anilist_meta is display-only, so a stale community score is
+// than on slots: this metadata is display-only, so a stale community score is
 // harmless, while a slot carrying one invites sorting on it.
 const extraShape = (n) => ({
 	anilistId: n.id,

@@ -47,10 +47,13 @@ export async function useTmdbMovieCastAPI(req, res) {
 			const found = findData.movie_results?.[0];
 			if (!found) throw new Error("Movie not found in TMDB");
 			tmdbId = String(found.id);
-			await pool.query("UPDATE movies SET tmdb_id=$1 WHERE id=$2", [
-				tmdbId,
-				movieId,
-			]);
+			// movieId comes off the query string, so the row has to be scoped
+			// to the caller -- without user_id this backfills whatever row the
+			// id names, including someone else's
+			await pool.query(
+				"UPDATE movies SET tmdb_id=$1 WHERE id=$2 AND user_id=$3",
+				[tmdbId, movieId, req.user.id],
+			);
 		}
 
 		const tmdbRes = await fetch(

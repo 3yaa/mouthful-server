@@ -91,12 +91,6 @@ export const validateShowPatch = (req, res, next) => {
     "dateCompleted",
     "curSeasonIndex",
     "curEpisode",
-    // Decisions the user makes about the row, which live in the same jsonb the
-    // chain does: which cut of a part they watch, which side entries they have
-    // said no to, which poster the row wears. The chain itself is only ever
-    // rebuilt through the refresh route below, which is what keeps this from
-    // being a way to write source metadata by hand.
-    "anilistMeta",
   ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
@@ -127,6 +121,18 @@ export const validateShowPatch = (req, res, next) => {
   next();
 };
 
+export const validateAnimeCut = (req, res, next) => {
+  const chosenId = Number(req.body?.chosenAnilistId);
+  if (!Number.isSafeInteger(chosenId) || chosenId <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "chosenAnilistId must be a positive integer",
+    });
+  }
+  req.body.chosenAnilistId = chosenId;
+  next();
+};
+
 // metadata-only allowlist for the "reload from source" flow.
 export const validateShowRefresh = (req, res, next) => {
   const updates = req.body;
@@ -140,7 +146,6 @@ export const validateShowRefresh = (req, res, next) => {
     "curSeasonIndex",
     "curEpisode",
     "anilistId",
-    "anilistMeta",
   ];
   // check if exists
   if (!updates || Object.keys(updates).length === 0) {

@@ -1,11 +1,11 @@
-import { getShowEpisodes } from "../imdbRating/imdbEpRatingCache.js";
-import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
-import { pool } from "../../config/db.js";
+import { getShowEpisodes } from "../../imdbRating/imdbEpRatingCache.js";
+import { getImdbRatings } from "../../imdbRating/imdbRatingCache.js";
+import { pool } from "../../../config/db.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-async function resolveImdbId(imdbId, tmdbId, showId) {
+async function resolveImdbId(imdbId, tmdbId, showId, userId) {
 	if (imdbId) return imdbId;
 
 	const res = await fetch(
@@ -16,8 +16,14 @@ async function resolveImdbId(imdbId, tmdbId, showId) {
 	const fetched = data.external_ids?.imdb_id;
 	if (!fetched) throw new Error("No IMDB ID found for this show");
 
+	// showId comes off the query string, so the row has to be scoped to the
+	// caller -- without user_id this backfills whatever row the id names,
+	// including someone else's
 	if (showId) {
-		await pool.query("UPDATE shows SET imdb_id=$1 WHERE id=$2", [fetched, showId]);
+		await pool.query(
+			"UPDATE shows SET imdb_id=$1 WHERE id=$2 AND user_id=$3",
+			[fetched, showId, userId],
+		);
 	}
 
 	return fetched;
@@ -27,7 +33,12 @@ export async function useOmdbEpisodeRatings(req, res) {
 	try {
 		const { imdbId, tmdbId, showId } = req.query;
 
-		const resolvedImdbId = await resolveImdbId(imdbId, tmdbId, showId);
+		const resolvedImdbId = await resolveImdbId(
+			imdbId,
+			tmdbId,
+			showId,
+			req.user.id,
+		);
 
 		const [episodes, ratings] = await Promise.all([
 			getShowEpisodes(resolvedImdbId),

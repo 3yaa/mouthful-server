@@ -1,7 +1,7 @@
 import express from "express";
 import {
 	useMovieTmdbAPI,
-	useMovieTmdbByIdAPI,
+	useMovieTmdbRefreshAPI,
 } from "../../controllers/movies/tmdbAPI.js";
 import {
 	validateMovieMetaAPI,
@@ -11,6 +11,6 @@ import {
 const moviesAPIRouter = express.Router();
 
 moviesAPIRouter.get("/tmdb", validateMovieMetaAPI, useMovieTmdbAPI);
-moviesAPIRouter.get("/tmdb-by-id", validateTmdbIdAPI, useMovieTmdbByIdAPI);
+moviesAPIRouter.get("/tmdb-refresh", validateTmdbIdAPI, useMovieTmdbRefreshAPI);
 
 export { moviesAPIRouter };

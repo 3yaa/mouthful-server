@@ -1,6 +1,6 @@
 import { pool } from "../../config/db.js";
 
-const convertShowToCamelCase = (show) => ({
+export const convertShowToCamelCase = (show) => ({
 	id: show.id,
 	dateCreated: show.date_created,
 	title: show.title,
@@ -10,12 +10,7 @@ const convertShowToCamelCase = (show) => ({
 	logoUrl: show.logo_url,
 	dateReleased: show.date_released,
 	seasons: show.seasons,
-	// Dual meaning, disambiguated by anilist_id:
-	//   anime       -> seasons[].anilistId
-	//   live-action -> array index into seasons
-	// The anime spine is rebuilt from scratch on every refresh and can insert
-	// entries mid-array, so a position would silently shift which part the user
-	// is on. TMDB seasons never reorder, so an index is safe there.
+	// normal: index number | anime: anilistId
 	curSeasonIndex: show.cur_season_index,
 	curEpisode: show.cur_episode,
 	status: show.status,
@@ -29,23 +24,30 @@ const convertShowToCamelCase = (show) => ({
 	tmdbId: show.tmdb_id,
 	imdbId: show.imdb_id,
 	anilistId: show.anilist_id,
-	anilistMeta: show.anilist_meta,
 	userId: show.user_id,
 });
 
-// The one place on the server that knows how cur_season_index is interpreted.
-// Mirrors slotIndexOf/slotOf on the client. Every read goes through this rather
-// than branching inline, so the two meanings cannot drift apart.
-export const resolveSlot = (seasons, { curSeasonIndex, anilistId }) => {
-	if (!Array.isArray(seasons)) return null;
-	if (anilistId != null) {
-		return seasons.find((s) => s.anilistId === curSeasonIndex) ?? null;
-	}
-	return seasons[curSeasonIndex ?? 0] ?? null;
-};
+// additional is apart of franchise
+const positionsOf = (seasons) => [
+	...seasons,
+	...seasons.flatMap((slot) =>
+		(slot.subNodes ?? []).filter((sub) => sub.kind === "sideStory"),
+	),
+];
 
-// anime slots carry `episodes`, TMDB seasons carry `episode_count`
-const episodeCount = (slot) => slot?.episodes ?? slot?.episode_count ?? 0;
+// normal show - index | anime - id
+export const resolveSlot = (seasons, { curSeasonIndex, anilistId }) => {
+	if (!Array.isArray(seasons) || !seasons.length) return null;
+	// normal
+	if (anilistId == null) {
+		return seasons[curSeasonIndex ?? 0] ?? seasons[0];
+	}
+	// anime
+	const found = positionsOf(seasons).find(
+		(slot) => slot.anilistId === curSeasonIndex,
+	);
+	return found ?? seasons[0];
+};
 
 export const getRandomShows = async (req, res) => {
 	try {
@@ -151,8 +153,7 @@ export const getShow = async (req, res) => {
 	}
 };
 
-// Whitelist, not a fallback map. The old `camelToSnakeMapping[key] || key` let
-// any request-body key become a column name in the SET clause.
+// api -> db
 const COLUMNS = {
 	title: "title",
 	creator: "creator",
@@ -172,10 +173,7 @@ const COLUMNS = {
 	tmdbId: "tmdb_id",
 	imdbId: "imdb_id",
 	anilistId: "anilist_id",
-	anilistMeta: "anilist_meta",
 };
-
-const JSONB_COLUMNS = ["seasons", "anilistMeta"];
 
 export const patchShow = async (req, res) => {
 	try {
@@ -199,38 +197,33 @@ export const patchShow = async (req, res) => {
 			delete updates.score;
 		}
 
-		// A refresh rebuilds the slot array from scratch. For anime there is
-		// nothing to remap -- progress rides on the AniList id, so it follows
-		// its part wherever that lands. All that is left is re-clamping the
-		// episode, in case a split cour got merged or an entry lost episodes.
+		// re-clamp ep in case a merge or a new entry
 		if (Array.isArray(updates.seasons)) {
+			// get current user position
 			const { rows } = await pool.query(
 				`SELECT cur_season_index, cur_episode, anilist_id FROM shows WHERE id=$1 AND user_id=$2`,
 				[showId, userId],
 			);
 			if (rows.length) {
-				// a show can become anime in the same patch that rebuilds its
-				// seasons, so prefer the incoming values
+				// show can become anime in the same patch
 				const pick = (key, col) =>
 					updates[key] !== undefined ? updates[key] : rows[0][col];
 				const slot = resolveSlot(updates.seasons, {
 					curSeasonIndex: pick("curSeasonIndex", "cur_season_index"),
 					anilistId: pick("anilistId", "anilist_id"),
 				});
-				const maxEp = episodeCount(slot);
+				const maxEp = slot?.episode_count ?? 0;
 				const ep = updates.curEpisode ?? rows[0].cur_episode ?? 0;
 				if (maxEp && ep > maxEp) updates.curEpisode = maxEp;
 			}
 		}
 
-		// jsonb columns need the object serialised. anilistMeta no longer has to
-		// land in the same update as seasons: side-story and film anchors carry
-		// afterSlotAnilistId, resolved at render time, so they cannot go stale.
-		for (const key of JSONB_COLUMNS) {
-			if (updates[key] !== undefined) {
-				updates[key] =
-					updates[key] === null ? null : JSON.stringify(updates[key]);
-			}
+		// jsonb columns need the object serialised
+		if (updates["seasons"] !== undefined) {
+			updates["seasons"] =
+				updates["seasons"] === null
+					? null
+					: JSON.stringify(updates["seasons"]);
 		}
 
 		const keys = Object.keys(updates).filter((k) => COLUMNS[k]);
@@ -300,10 +293,9 @@ export const createShow = async (req, res) => {
 			tmdbId,
 			imdbId,
 			anilistId,
-			anilistMeta,
 		} = req.body;
 
-		// anime starts at the first slot's AniList id, live-action at index 0
+		// anime -> first slot's AniList id | live-action -> index 0
 		const startingSeason =
 			curSeasonIndex ??
 			(anilistId != null ? (seasons?.[0]?.anilistId ?? null) : 0);
@@ -327,10 +319,9 @@ export const createShow = async (req, res) => {
       tmdb_id,
       imdb_id,
       anilist_id,
-      anilist_meta,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
     ) RETURNING *
   `;
 		const values = [
@@ -342,8 +333,8 @@ export const createShow = async (req, res) => {
 			dateReleased,
 			seasons ? JSON.stringify(seasons) : null,
 			startingSeason,
-			curEpisode,
-			status,
+			curEpisode ?? 0,
+			status ?? "Want to Watch",
 			scoreObj?.mu ?? null,
 			scoreObj?.phi ?? null,
 			dateCompleted,
@@ -351,7 +342,6 @@ export const createShow = async (req, res) => {
 			tmdbId,
 			imdbId ?? null,
 			anilistId ?? null,
-			anilistMeta ? JSON.stringify(anilistMeta) : null,
 			userId,
 		];
 		const result = await pool.query(query, values);
@@ -400,15 +390,6 @@ export const deleteShow = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error deleting show: ", error);
-
-		// Handle foreign key constraints
-		if (error.code === "23503") {
-			return res.status(400).json({
-				success: false,
-				message:
-					"Cannot delete show because it is referenced by other records",
-			});
-		}
 
 		res.status(500).json({
 			success: false,

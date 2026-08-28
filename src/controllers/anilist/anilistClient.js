@@ -1,11 +1,11 @@
 const ENDPOINT = "https://graphql.anilist.co";
 
-// confirmed from the x-ratelimit-limit header
+// 30 req per min
 const RATE_LIMIT = 30;
 const WINDOW_MS = 60 * 1000;
 // franchise TTL
 const CACHE_TTL = 12 * 60 * 60 * 1000;
-const MAX_429_RETRIES = 2;
+const MAX_429_RETRIES = 3;
 
 // oldest first
 const recent = [];
@@ -58,10 +58,17 @@ async function send(query, variables, attempt = 0) {
 	return json.data;
 }
 
-export async function anilistQuery(query, variables = {}) {
+//
+export async function anilistQuery(
+	query,
+	variables = {},
+	bypassCache = false,
+) {
 	const key = JSON.stringify({ query, variables });
-	const hit = cache.get(key);
-	if (hit && hit.expires > Date.now()) return hit.value;
+	if (!bypassCache) {
+		const hit = cache.get(key);
+		if (hit && hit.expires > Date.now()) return hit.value;
+	}
 
 	const value = await send(query, variables);
 	cache.set(key, { value, expires: Date.now() + CACHE_TTL });

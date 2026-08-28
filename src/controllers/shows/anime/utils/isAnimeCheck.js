@@ -1,0 +1,20 @@
+const TMDB_ANIME_KEYWORD = 210024;
+const TMDB_ANIMATION_GENRE = 16;
+const ANIME_ORIGINS = ["JP", "CN", "KR", "TW"];
+
+// genre+origin
+export function isAnime(tmdbDetail) {
+	const genres = (tmdbDetail?.genres ?? []).map((g) => g.id);
+	const keywords = (tmdbDetail?.keywords?.results ?? []).map((k) => k.id);
+	if (keywords.includes(TMDB_ANIME_KEYWORD)) return true;
+
+	const origins = tmdbDetail?.origin_country ?? [];
+	return (
+		genres.includes(TMDB_ANIMATION_GENRE) &&
+		origins.some((c) => ANIME_ORIGINS.includes(c))
+	);
+}
+
+// boolean for if anime or not | forceAnime "1"/"0"
+export const runAnime = (forceAnime, tmdbDetect) =>
+	forceAnime === "1" || (forceAnime !== "0" && Boolean(tmdbDetect));

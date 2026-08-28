@@ -1,8 +1,8 @@
 import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
 import { getSteamGridLogos } from "../utils/steamGridLogo.js";
 
-// fetch a single game/dlc by its IGDB id -- no duplicate filtering, so it can
-export async function useIgdbByIdAPI(req, res) {
+// refetch a single game/dlc by its IGDB id -- no duplicate filtering, so it can
+export async function useIgdbRefreshAPI(req, res) {
 	try {
 		const igdbId = req.query.igdbId;
 		const title = req.query.title;
@@ -67,7 +67,7 @@ export async function useIgdbByIdAPI(req, res) {
 			data: processedGame,
 		});
 	} catch (error) {
-		console.error("IGDB by-id fetch failed: ", error);
+		console.error("IGDB refresh fetch failed: ", error);
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch game from IGDB",

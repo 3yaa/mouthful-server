@@ -149,14 +149,24 @@ export const getMovie = async (req, res) => {
 	}
 };
 
-const camelToSnakeMapping = {
-	dateCompleted: "date_completed",
-	lastUpdated: "last_updated",
-	seriesTitle: "series_title",
-	placeInSeries: "place_in_series",
+const COLUMNS = {
+	title: "title",
+	director: "director",
+	cover: "cover",
 	backdropUrl: "backdrop_url",
 	logoUrl: "logo_url",
 	dateReleased: "date_released",
+	seriesTitle: "series_title",
+	placeInSeries: "place_in_series",
+	prequel: "prequel",
+	sequel: "sequel",
+	status: "status",
+	score_mu: "score_mu",
+	score_phi: "score_phi",
+	dateCompleted: "date_completed",
+	lastUpdated: "last_updated",
+	note: "note",
+	imdbId: "imdb_id",
 	tmdbId: "tmdb_id",
 };
 
@@ -182,15 +192,18 @@ export const patchMovie = async (req, res) => {
 			delete updates.score;
 		}
 
-		// breaks all the keys into key=$i
-		const setClause = Object.keys(updates)
-			.map((key, index) => {
-				const columnName = camelToSnakeMapping[key] || key;
-				return `${columnName}=$${index + 1}`;
-			})
+		const keys = Object.keys(updates).filter((key) => COLUMNS[key]);
+		if (!keys.length) {
+			return res.status(400).json({
+				success: false,
+				message: "No updatable fields provided",
+			});
+		}
+
+		const setClause = keys
+			.map((key, index) => `${COLUMNS[key]}=$${index + 1}`)
 			.join(", ");
-		// gets all the values of the keys
-		const values = Object.values(updates);
+		const values = keys.map((key) => updates[key]);
 		values.push(movieId);
 		values.push(userId);
 
@@ -352,15 +365,6 @@ export const deleteMovie = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error deleting movie: ", error);
-
-		// Handle foreign key constraints
-		if (error.code === "23503") {
-			return res.status(400).json({
-				success: false,
-				message:
-					"Cannot delete movie because it is referenced by other records",
-			});
-		}
 
 		res.status(500).json({
 			success: false,

@@ -352,7 +352,7 @@ async function assembleBook(book) {
 }
 
 // reload metadata for a book already in the library, keyed by hardcover id
-export async function useHardcoverByKeyAPI(req, res) {
+export async function useHardcoverRefreshAPI(req, res) {
 	try {
 		const key = req.query.key;
 
@@ -370,7 +370,7 @@ export async function useHardcoverByKeyAPI(req, res) {
 			data: processedBook,
 		});
 	} catch (e) {
-		console.error("Hardcover by-key fetch failed: ", e);
+		console.error("Hardcover refresh fetch failed: ", e);
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch book from Hardcover",

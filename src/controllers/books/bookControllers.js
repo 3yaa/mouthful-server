@@ -1,62 +1,61 @@
 import { pool } from "../../config/db.js";
 
 const convertBookToCamelCase = (book) => ({
-  id: book.id,
-  title: book.title,
-  author: book.author,
-  cover: book.cover ?? null,
-  numPages: book.num_pages,
-  rating: book.rating,
-  datePublished: book.date_published,
-  seriesTitle: book.series_title,
-  placeInSeries: book.place_in_series,
-  prequel: book.prequel,
-  sequel: book.sequel,
-  status: book.status,
-  score:
-    book.score_mu ? { mu: book.score_mu, phi: book.score_phi } : null,
-  dateCompleted: book.date_completed,
-  note: book.note,
-  dateCreated: book.date_created,
-  lastUpdated: book.last_updated,
-  key: book.key,
-  userId: book.user_id,
+	id: book.id,
+	title: book.title,
+	author: book.author,
+	cover: book.cover ?? null,
+	numPages: book.num_pages,
+	rating: book.rating,
+	datePublished: book.date_published,
+	seriesTitle: book.series_title,
+	placeInSeries: book.place_in_series,
+	prequel: book.prequel,
+	sequel: book.sequel,
+	status: book.status,
+	score: book.score_mu ? { mu: book.score_mu, phi: book.score_phi } : null,
+	dateCompleted: book.date_completed,
+	note: book.note,
+	dateCreated: book.date_created,
+	lastUpdated: book.last_updated,
+	key: book.key,
+	userId: book.user_id,
 });
 export const getRandomBooks = async (req, res) => {
-  try {
-    const userId = req.user.id;
+	try {
+		const userId = req.user.id;
 
-    const result = await pool.query(
-      `
+		const result = await pool.query(
+			`
       SELECT * FROM books
       WHERE user_id=$1 AND status='Want to Read'
       ORDER BY RANDOM()
       LIMIT 10
       `,
-      [userId],
-    );
+			[userId],
+		);
 
-    const convertedBooks = result.rows.map(convertBookToCamelCase);
+		const convertedBooks = result.rows.map(convertBookToCamelCase);
 
-    res.json({
-      success: true,
-      data: convertedBooks,
-    });
-  } catch (error) {
-    console.error("Error fetching random books: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching random books",
-      error: error.message,
-    });
-  }
+		res.json({
+			success: true,
+			data: convertedBooks,
+		});
+	} catch (error) {
+		console.error("Error fetching random books: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error fetching random books",
+			error: error.message,
+		});
+	}
 };
 
 export const getBooks = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const result = await pool.query(
-      `
+	try {
+		const userId = req.user.id;
+		const result = await pool.query(
+			`
       SELECT * FROM books 
       WHERE user_id=$1 
       ORDER BY 
@@ -71,157 +70,171 @@ export const getBooks = async (req, res) => {
           ELSE last_updated
         END DESC
       `,
-      [userId],
-    );
+			[userId],
+		);
 
-    const convertedBooks = result.rows.map(convertBookToCamelCase);
+		const convertedBooks = result.rows.map(convertBookToCamelCase);
 
-    res.json({
-      success: true,
-      count: convertedBooks.length,
-      data: convertedBooks,
-    });
-  } catch (error) {
-    console.error("Error fetching books: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching books",
-      error: error.message,
-    });
-  }
+		res.json({
+			success: true,
+			count: convertedBooks.length,
+			data: convertedBooks,
+		});
+	} catch (error) {
+		console.error("Error fetching books: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error fetching books",
+			error: error.message,
+		});
+	}
 };
 
 export const getBook = async (req, res) => {
-  try {
-    const bookId = req.params.id;
-    const userId = req.user.id;
-    const result = await pool.query(
-      `SELECT * FROM books WHERE id=$1 AND user_id=$2`,
-      [bookId, userId],
-    );
+	try {
+		const bookId = req.params.id;
+		const userId = req.user.id;
+		const result = await pool.query(
+			`SELECT * FROM books WHERE id=$1 AND user_id=$2`,
+			[bookId, userId],
+		);
 
-    // if no book were found
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Book not found",
-      });
-    }
+		// if no book were found
+		if (result.rows.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "Book not found",
+			});
+		}
 
-    const convertedBook = convertBookToCamelCase(result.rows[0]);
+		const convertedBook = convertBookToCamelCase(result.rows[0]);
 
-    res.status(200).json({
-      success: true,
-      data: convertedBook,
-    });
-  } catch (error) {
-    console.error("Error fetching book: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching book",
-      error: error.message,
-    });
-  }
+		res.status(200).json({
+			success: true,
+			data: convertedBook,
+		});
+	} catch (error) {
+		console.error("Error fetching book: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error fetching book",
+			error: error.message,
+		});
+	}
 };
 
-const camelToSnakeMapping = {
-  dateCompleted: "date_completed",
-  lastUpdated: "last_updated",
-  seriesTitle: "series_title",
-  placeInSeries: "place_in_series",
-  datePublished: "date_published",
-  numPages: "num_pages",
+const COLUMNS = {
+	title: "title",
+	author: "author",
+	cover: "cover",
+	numPages: "num_pages",
+	rating: "rating",
+	datePublished: "date_published",
+	seriesTitle: "series_title",
+	placeInSeries: "place_in_series",
+	prequel: "prequel",
+	sequel: "sequel",
+	status: "status",
+	score_mu: "score_mu",
+	score_phi: "score_phi",
+	dateCompleted: "date_completed",
+	lastUpdated: "last_updated",
+	note: "note",
+	key: "key",
 };
 
 export const patchBook = async (req, res) => {
-  try {
-    const bookId = req.params.id;
-    const userId = req.user.id;
-    const { indirectUpdate, ...cleanUpdates } = req.body;
-    const updates = { ...cleanUpdates };
+	try {
+		const bookId = req.params.id;
+		const userId = req.user.id;
+		const { indirectUpdate, ...cleanUpdates } = req.body;
+		const updates = { ...cleanUpdates };
 
-    if (!indirectUpdate) {
-      updates.lastUpdated = new Date();
-    }
+		if (!indirectUpdate) {
+			updates.lastUpdated = new Date();
+		}
 
-    if (updates.score !== undefined) {
-      if (updates.score === null) {
-        updates.score_mu = null;
-        updates.score_phi = null;
-      } else {
-        updates.score_mu = updates.score.mu;
-        updates.score_phi = updates.score.phi;
-      }
-      delete updates.score;
-    }
+		if (updates.score !== undefined) {
+			if (updates.score === null) {
+				updates.score_mu = null;
+				updates.score_phi = null;
+			} else {
+				updates.score_mu = updates.score.mu;
+				updates.score_phi = updates.score.phi;
+			}
+			delete updates.score;
+		}
 
-    // breaks all the keys into key=$i
-    const setClause = Object.keys(updates)
-      .map((key, index) => {
-        const columnName = camelToSnakeMapping[key] || key;
-        return `${columnName}=$${index + 1}`;
-      })
-      .join(", ");
-    // gets all the values of the keys
-    const values = Object.values(updates);
-    values.push(bookId);
-    values.push(userId);
+		const keys = Object.keys(updates).filter((key) => COLUMNS[key]);
+		if (!keys.length) {
+			return res.status(400).json({
+				success: false,
+				message: "No updatable fields provided",
+			});
+		}
 
-    const query = `
+		const setClause = keys
+			.map((key, index) => `${COLUMNS[key]}=$${index + 1}`)
+			.join(", ");
+		const values = keys.map((key) => updates[key]);
+		values.push(bookId);
+		values.push(userId);
+
+		const query = `
 	 	UPDATE books
 		SET ${setClause} WHERE id=$${values.length - 1} AND user_id=$${
-      values.length
-    } RETURNING * 
+			values.length
+		} RETURNING * 
 	  `;
-    const result = await pool.query(query, values);
+		const result = await pool.query(query, values);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Book not found",
-      });
-    }
+		if (result.rows.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "Book not found",
+			});
+		}
 
-    const convertedBook = convertBookToCamelCase(result.rows[0]);
+		const convertedBook = convertBookToCamelCase(result.rows[0]);
 
-    res.status(200).json({
-      success: true,
-      message: "Book updated successfully",
-      data: convertedBook,
-    });
-  } catch (error) {
-    console.error("Error updating book: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error updating book",
-      error: error.message,
-    });
-  }
+		res.status(200).json({
+			success: true,
+			message: "Book updated successfully",
+			data: convertedBook,
+		});
+	} catch (error) {
+		console.error("Error updating book: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error updating book",
+			error: error.message,
+		});
+	}
 };
 
 // NEED TO VALIDATE NON-NULLABLE DATA
 export const createBook = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const {
-      title,
-      author,
-      cover: coverObj,
-      datePublished,
-      seriesTitle,
-      placeInSeries,
-      prequel,
-      sequel,
-      status,
-      score: scoreObj,
-      dateCompleted,
-      note,
-      key,
-      numPages,
-      rating,
-    } = req.body;
+	try {
+		const userId = req.user.id;
+		const {
+			title,
+			author,
+			cover: coverObj,
+			datePublished,
+			seriesTitle,
+			placeInSeries,
+			prequel,
+			sequel,
+			status,
+			score: scoreObj,
+			dateCompleted,
+			note,
+			key,
+			numPages,
+			rating,
+		} = req.body;
 
-    const query = `
+		const query = `
     INSERT INTO books (
       title,
       author,
@@ -244,84 +257,76 @@ export const createBook = async (req, res) => {
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
     ) RETURNING *
 	`;
-    const values = [
-      title,
-      author,
-      coverObj,
-      datePublished,
-      seriesTitle,
-      placeInSeries,
-      prequel,
-      sequel,
-      status,
-      scoreObj?.mu,
-      scoreObj?.phi,
-      dateCompleted,
-      note,
-      key,
-      numPages,
-      rating,
-      userId,
-    ];
-    const result = await pool.query(query, values);
+		const values = [
+			title,
+			author,
+			coverObj,
+			datePublished,
+			seriesTitle,
+			placeInSeries,
+			prequel,
+			sequel,
+			status,
+			scoreObj?.mu,
+			scoreObj?.phi,
+			dateCompleted,
+			note,
+			key,
+			numPages,
+			rating,
+			userId,
+		];
+		const result = await pool.query(query, values);
 
-    const convertedBook = convertBookToCamelCase(result.rows[0]);
+		const convertedBook = convertBookToCamelCase(result.rows[0]);
 
-    res.status(201).json({
-      success: true,
-      message: "Book Created Successfully",
-      data: convertedBook,
-    });
-  } catch (error) {
-    console.error("Error creating book: ", error);
-    res.status(500).json({
-      success: false,
-      message: "Error creating book",
-      error: error.message,
-    });
-  }
+		res.status(201).json({
+			success: true,
+			message: "Book Created Successfully",
+			data: convertedBook,
+		});
+	} catch (error) {
+		console.error("Error creating book: ", error);
+		res.status(500).json({
+			success: false,
+			message: "Error creating book",
+			error: error.message,
+		});
+	}
 };
 
 export const deleteBook = async (req, res) => {
-  try {
-    const bookId = req.params.id;
-    const userId = req.user.id;
+	try {
+		const bookId = req.params.id;
+		const userId = req.user.id;
 
-    // delete book
-    const result = await pool.query(
-      "DELETE FROM books WHERE id=$1 AND user_id=$2 RETURNING *",
-      [bookId, userId],
-    );
+		// delete book
+		const result = await pool.query(
+			"DELETE FROM books WHERE id=$1 AND user_id=$2 RETURNING *",
+			[bookId, userId],
+		);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Book not found",
-      });
-    }
+		if (result.rows.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "Book not found",
+			});
+		}
 
-    const convertedBook = convertBookToCamelCase(result.rows[0]);
+		const convertedBook = convertBookToCamelCase(result.rows[0]);
 
-    res.status(200).json({
-      success: true,
-      message: "Book deleted successfully",
-      data: convertedBook,
-    });
-  } catch (error) {
-    console.error("Error deleting book: ", error);
+		res.status(200).json({
+			success: true,
+			message: "Book deleted successfully",
+			data: convertedBook,
+		});
+	} catch (error) {
+		console.error("Error deleting book: ", error);
 
-    // Handle foreign key constraints
-    if (error.code === "23503") {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot delete book because it is referenced by other records",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Error deleting book",
-      error: error.message,
-    });
-  }
+		res.status(500).json({
+			success: false,
+			message: "Error deleting book",
+			error: error.message,
+		});
+	}
 };
