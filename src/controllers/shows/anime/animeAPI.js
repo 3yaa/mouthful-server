@@ -3,8 +3,12 @@ import {
 	buildRelationIndex,
 	relateAdditional,
 } from "./buildRelations/additionalsRelation.js";
-import { getRelationMap } from "./buildRelations/linkingToBucket.js";
+import {
+	reviewCandidates,
+	walkSpine,
+} from "./buildRelations/reviewRelations.js";
 import { collapseAltCuts } from "./buildRelations/spineNodesAlts.js";
+import { canHoldSpine, isFilm } from "./buildRelations/classifyNodes.js";
 import { findByTmdb, getFribbMap } from "./externalCalls/fribbMap.js";
 import { applyPartsForSeason } from "./utils/parseParts.js";
 import {
@@ -37,16 +41,10 @@ async function buildAnimeChain(
 		})),
 	};
 
-	// PHASE 2: build relation between shikimori's node and links
-	const { spine, additionals } = getRelationMap(graph, rootMalId);
-
-	// PHASE 3: link to anilist
-	const anilistGraph = {
-		rootId: null,
-		spine: new Set(),
-		additionals: new Set(),
-		untranslated: [],
-	};
+	// PHASE 2: link to anilist
+	const candidates = new Set();
+	const untranslated = [];
+	let rootId = null;
 	//
 	const { byMal, byAnilist } = await getFribbMap();
 	for (const node of graph.nodes) {
@@ -54,64 +52,85 @@ async function buildAnimeChain(
 		const fribbData = byMal.get(malId);
 		//
 		if (!fribbData || fribbData.anilistId == null) {
-			anilistGraph.untranslated.push(node);
+			untranslated.push(node);
 			continue;
 		}
 		//
 		const anilistId = Number(fribbData.anilistId);
-		if (malId === rootMalId) {
-			anilistGraph.rootId = anilistId;
-		}
-		// convert mal to anilistId
-		if (spine.has(malId)) {
-			anilistGraph.spine.add(anilistId);
-		} else if (additionals.has(malId)) {
-			anilistGraph.additionals.add(anilistId);
-		}
+		if (malId === rootMalId) rootId = anilistId;
+		candidates.add(anilistId);
 	}
-	if (anilistGraph.rootId == null) return null;
+	if (rootId == null) return null;
 
-	// PHASE 4: get anilist payload for each node
-	const anilistIds = [
-		...new Set([...anilistGraph.spine, ...anilistGraph.additionals]),
-	];
-	const enrichedNodes = await fetchAnilist(anilistIds, forceRefresh);
-	const rootAnime = enrichedNodes.get(anilistGraph.rootId);
+	// PHASE 3: enrich with anilist
+	const enrichedNodes = await fetchAnilist([...candidates], forceRefresh);
+	const rootAnime = enrichedNodes.get(rootId);
 	if (!rootAnime) return null;
+
+	// PHASE 4: review shikimori | seperate
+	// no confirming edge is dropped
+	const anilistSpine = walkSpine(candidates, enrichedNodes, rootId);
+	const { confirmed } = reviewCandidates(
+		candidates,
+		enrichedNodes,
+		anilistSpine,
+	);
+	// classify nodes
+	const spineIds = new Set();
+	const additionalIds = new Set();
+	for (const anilistId of confirmed) {
+		const anime = enrichedNodes.get(anilistId);
+		const onSpine =
+			anilistSpine.has(anilistId) &&
+			(anilistId === rootId || canHoldSpine(anime));
+		if (onSpine) spineIds.add(anilistId);
+		else additionalIds.add(anilistId);
+	}
 
 	// PHASE 5: build anime shape
 	const missingFromAnilist = [];
 	const shapedMainline = shapeAnimeGroup(
-		anilistGraph.spine,
+		spineIds,
 		enrichedNodes,
 		true,
 		missingFromAnilist,
 	);
+	// additional
 	const additionalAnime = shapeAnimeGroup(
-		anilistGraph.additionals,
+		additionalIds,
 		enrichedNodes,
 		false,
 		missingFromAnilist,
 	);
+	// check what kinda additional they are
+	for (const additional of additionalAnime) {
+		const node = enrichedNodes.get(additional.anilistId);
+		const tmdbMovieId = filmTmdbId(additional, byAnilist);
+		additional.kind = isFilm(node, tmdbMovieId) ? "film" : "sideStory";
+		if (additional.kind === "film") additional.tmdbMovieId = tmdbMovieId;
+	}
 
 	// PHASE 6: build franchise
 	const { collapsed: fullFranchise, franchiseById } = collapseAltCuts(
 		shapedMainline,
-		anilistGraph.spine,
+		spineIds,
 		enrichedNodes,
-		anilistGraph.rootId,
+		rootId,
 		preferredCuts,
 	);
 	fullFranchise.sort(compareStartDate);
 	// add source manga to tree
-	const rootNode = franchiseById.get(anilistGraph.rootId);
+	const rootNode = franchiseById.get(rootId);
 	if (rootNode) {
 		rootNode.sourceManga = getMangaAdaptation(rootAnime);
 	}
+	// films are not a slot
+	const spineFilms = liftFilms(fullFranchise, byAnilist);
+
 	// relate additional onto parent
 	const relationIndex = buildRelationIndex(
-		anilistGraph.spine,
-		anilistGraph.additionals,
+		spineIds,
+		additionalIds,
 		enrichedNodes,
 	);
 	relateAdditional(
@@ -120,15 +139,7 @@ async function buildAnimeChain(
 		franchiseById,
 		fullFranchise,
 	);
-	// for films get tmdbId
-	for (const slot of fullFranchise) {
-		for (const sub of slot.subNodes ?? []) {
-			if (sub.kind !== "film") continue;
-			const mapped = byAnilist.get(sub.anilistId);
-			sub.tmdbMovieId =
-				mapped?.tmdbType === "movie" ? (mapped.tmdbId ?? null) : null;
-		}
-	}
+	hangFilms(spineFilms, fullFranchise);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
 
@@ -136,7 +147,7 @@ async function buildAnimeChain(
 		root: shapeAnime(rootAnime, true),
 		fullFranchise,
 		missingFromAnilist,
-		untranslated: anilistGraph.untranslated,
+		untranslated,
 	};
 }
 

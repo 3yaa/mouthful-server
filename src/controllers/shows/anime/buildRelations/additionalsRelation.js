@@ -75,17 +75,15 @@ export function relateAdditional(
 
 		//
 		if (relationType === "ALTERNATIVE") {
+			// movie not another slot
+			const { kind, tmdbMovieId, ...variantMedia } = additional;
 			parent.variants.push({
-				...additional,
+				...variantMedia,
 				variantKind: "alternate_cut",
 				relationType,
 			});
 		} else {
-			parent.subNodes.push({
-				...additional,
-				kind: additional.isMovie ? "film" : "sideStory",
-				relationType,
-			});
+			parent.subNodes.push({ ...additional, relationType });
 		}
 	}
 }
