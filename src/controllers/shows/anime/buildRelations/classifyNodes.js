@@ -33,7 +33,7 @@ export function isFilm(anime, tmdbMovieId) {
 	return isFeature(anime) && !continuesBroadcast(anime);
 }
 
-function filmTmdbId(anime, byAnilist) {
+export function filmTmdbId(anime, byAnilist) {
 	const mapped = byAnilist?.get(anime?.anilistId ?? anime?.id);
 	return mapped?.tmdbType === "movie" ? (mapped.tmdbId ?? null) : null;
 }

@@ -8,7 +8,13 @@ import {
 	walkSpine,
 } from "./buildRelations/reviewRelations.js";
 import { collapseAltCuts } from "./buildRelations/spineNodesAlts.js";
-import { canHoldSpine, isFilm } from "./buildRelations/classifyNodes.js";
+import {
+	canHoldSpine,
+	filmTmdbId,
+	hangFilms,
+	isFilm,
+	liftFilms,
+} from "./buildRelations/classifyNodes.js";
 import { findByTmdb, getFribbMap } from "./externalCalls/fribbMap.js";
 import { applyPartsForSeason } from "./utils/parseParts.js";
 import {
