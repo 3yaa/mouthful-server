@@ -1,7 +1,7 @@
 import { checkDuplicate } from "../../utils/checkDuplicate.js";
 import { getLogoUrls } from "../../utils/tmdbLogo.js";
 import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
-import { isAnime } from "../anime/utils/isAnimeCheck.js";
+import { isAnime, runAnime } from "../anime/utils/isAnimeCheck.js";
 import { pickAnimeResult } from "../anime/utils/utilFunctions.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
@@ -38,7 +38,7 @@ async function tmdbFetch(path, params = {}) {
 }
 
 // --- 1st call -- title | tmdbId {dup check as well }
-export async function getTmdbId(title, year, userId, wantAnimeRoot = false) {
+export async function getTmdbId(title, year, userId, forceAnime) {
 	const data = await tmdbFetch(
 		"/search/tv",
 		year ? { query: title, first_air_date_year: year } : { query: title },
@@ -46,7 +46,9 @@ export async function getTmdbId(title, year, userId, wantAnimeRoot = false) {
 	const results = data.results ?? [];
 	// for anime go thru to find main node
 	const show =
-		(wantAnimeRoot ? await pickAnimeResult(results) : null) ?? results[0];
+		(runAnime(forceAnime, isAnime(results[0]))
+			? await pickAnimeResult(results)
+			: null) ?? results[0];
 	if (!show) {
 		throw apiError(404, `No show found for "${title}"`, "No show results");
 	}

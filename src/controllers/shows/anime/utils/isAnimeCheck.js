@@ -4,7 +4,9 @@ const ANIME_ORIGINS = ["JP", "CN", "KR", "TW"];
 
 // genre+origin
 export function isAnime(tmdbDetail) {
-	const genres = (tmdbDetail?.genres ?? []).map((g) => g.id);
+	const genres = tmdbDetail?.genres
+		? tmdbDetail.genres.map((g) => g.id)
+		: (tmdbDetail?.genre_ids ?? []);
 	const keywords = (tmdbDetail?.keywords?.results ?? []).map((k) => k.id);
 	if (keywords.includes(TMDB_ANIME_KEYWORD)) return true;
 

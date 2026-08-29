@@ -23,7 +23,7 @@ export async function useShowAPI(req, res) {
 			req.query.title,
 			req.query.year,
 			req.user.id,
-			req.query.forceAnime === "1",
+			req.query.forceAnime,
 		);
 		const enriched = await getTmdbShowEnrichment(detected.tmdbId);
 		await applyAnime(
