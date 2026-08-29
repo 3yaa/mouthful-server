@@ -30,6 +30,21 @@ export const cutIdsFromQuery = (cuts) =>
 		.map(Number)
 		.filter((id) => Number.isSafeInteger(id) && id > 0);
 
+// take film out of the slot
+export function activeAnimeCutIds(seasons) {
+	const active = [];
+	for (const season of seasons ?? []) {
+		active.push(season);
+		for (const subNode of season?.subNodes ?? []) {
+			if (subNode?.kind === "film" && subNode.isMainLine)
+				active.push(subNode);
+		}
+	}
+	return active
+		.map((item) => Number(item?.anilistId))
+		.filter((id) => Number.isSafeInteger(id) && id > 0);
+}
+
 export async function storedAnimeState(userId, tmdbId) {
 	const { rows } = await pool.query(
 		`SELECT seasons FROM shows
@@ -38,11 +53,7 @@ export async function storedAnimeState(userId, tmdbId) {
 		[userId, tmdbId],
 	);
 	if (!rows.length) return null;
-	return {
-		cuts: (rows[0].seasons ?? [])
-			.map((season) => Number(season?.anilistId))
-			.filter((id) => Number.isSafeInteger(id) && id > 0),
-	};
+	return { cuts: activeAnimeCutIds(rows[0].seasons) };
 }
 
 export async function applyAnime(

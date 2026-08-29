@@ -1,60 +1,72 @@
 import { pool } from "../../../config/db.js";
 import { convertShowToCamelCase } from "../showControllers.js";
-import { compareStartDate } from "./utils/utilFunctions.js";
+import { applyAnimeChain } from "./animeAPI.js";
+import { activeAnimeCutIds } from "./utils/utilFunctions.js";
 
 const idOf = (item) => Number(item?.anilistId);
 const variantsOf = (item) =>
 	Array.isArray(item?.variants) ? item.variants : [];
 
+// film cuts are lifted from seasons and stored as subnodes
 function findCut(seasons, chosenId) {
-	for (let i = 0; i < seasons.length; i++) {
-		const active = seasons[i];
-		const variants = variantsOf(active);
-		if (idOf(active) === chosenId && variants.length) {
-			return { index: i, active, chosen: active };
+	for (let seasonIndex = 0; seasonIndex < seasons.length; seasonIndex++) {
+		const season = seasons[seasonIndex];
+		const activeItems = [
+			season,
+			...(season?.subNodes ?? []).filter(
+				(subNode) => subNode?.kind === "film" && subNode.isMainLine,
+			),
+		];
+		for (const active of activeItems) {
+			const variants = variantsOf(active);
+			if (idOf(active) === chosenId && variants.length) {
+				return { seasonIndex, active, chosen: active, variants };
+			}
+			const chosen = variants.find(
+				(variant) => idOf(variant) === chosenId,
+			);
+			if (chosen) return { seasonIndex, active, chosen, variants };
 		}
-		//
-		const chosen = variants.find((variant) => idOf(variant) === chosenId);
-		if (chosen) return { index: i, active, chosen };
 	}
 	return null;
 }
 
-function promoteCut(active, chosen) {
-	const {
-		subNodes = [],
-		variants = [],
-		position,
-		number,
-		sourceManga,
-		...activeMedia
-	} = active;
-	const {
-		variantKind: _variantKind,
-		relationType: _relationType,
-		isMainLine: _isMainLine,
-		...chosenMedia
-	} = chosen;
+function positionsOf(seasons) {
+	return seasons.flatMap((season) => [
+		season,
+		...(season?.subNodes ?? []).filter(
+			(subNode) => subNode?.kind === "sideStory",
+		),
+	]);
+}
 
-	const demoted = {
-		...activeMedia,
-		isMainLine: false,
-		variantKind: "alternate_cut",
-		relationType: "ALTERNATIVE",
-	};
-	const remaining = variants.filter(
-		(variant) => idOf(variant) !== idOf(chosen),
-	);
+function progressAfterRebuild(current, seasons, cut, chosenId) {
+	const positions = positionsOf(seasons);
+	const currentId = Number(current.cur_season_index);
+	const survived = positions.find((item) => idOf(item) === currentId);
+	if (survived) {
+		const maxEpisode = Number(survived.episode_count) || 0;
+		return {
+			seasonId: currentId,
+			episode: maxEpisode
+				? Math.min(current.cur_episode ?? 0, maxEpisode)
+				: (current.cur_episode ?? 0),
+		};
+	}
+	// move progress if cut was cur position
+	if (currentId === idOf(cut.active)) {
+		const chosenPosition = positions.find(
+			(item) => idOf(item) === chosenId,
+		);
+		const fallback = seasons[Math.min(cut.seasonIndex, seasons.length - 1)];
+		return {
+			seasonId: idOf(chosenPosition ?? fallback) || null,
+			episode: 0,
+		};
+	}
 
-	return {
-		...chosenMedia,
-		isMainLine: true,
-		subNodes,
-		variants: [...remaining, demoted].sort(compareStartDate),
-		position,
-		number,
-		...(sourceManga !== undefined ? { sourceManga } : {}),
-	};
+	const fallback = seasons[0];
+	return { seasonId: idOf(fallback) || null, episode: 0 };
 }
 
 export async function selectAnimeCut(req, res) {
@@ -65,7 +77,6 @@ export async function selectAnimeCut(req, res) {
 		const userId = req.user.id;
 		const chosenId = req.body.chosenAnilistId;
 
-		// find cur structure
 		await client.query("BEGIN");
 		const currentResult = await client.query(
 			`SELECT * FROM shows WHERE id=$1 AND user_id=$2 FOR UPDATE`,
@@ -77,8 +88,13 @@ export async function selectAnimeCut(req, res) {
 				.status(404)
 				.json({ success: false, message: "Show not found" });
 		}
+
 		const current = currentResult.rows[0];
-		if (current.anilist_id == null || !Array.isArray(current.seasons)) {
+		if (
+			current.anilist_id == null ||
+			current.tmdb_id == null ||
+			!Array.isArray(current.seasons)
+		) {
 			await client.query("ROLLBACK");
 			return res.status(409).json({
 				success: false,
@@ -86,7 +102,6 @@ export async function selectAnimeCut(req, res) {
 			});
 		}
 
-		// find the cut picked
 		const cut = findCut(current.seasons, chosenId);
 		if (!cut) {
 			await client.query("ROLLBACK");
@@ -95,8 +110,6 @@ export async function selectAnimeCut(req, res) {
 				message: "That entry is not an available cut for this show",
 			});
 		}
-
-		// no-op if selecting the same cut
 		if (cut.active === cut.chosen) {
 			await client.query("COMMIT");
 			return res.json({
@@ -106,26 +119,52 @@ export async function selectAnimeCut(req, res) {
 			});
 		}
 
-		// swap cut
-		const seasons = [...current.seasons];
-		seasons[cut.index] = promoteCut(cut.active, cut.chosen);
+		// rebuild season json
+		const groupIds = new Set([idOf(cut.active), ...cut.variants.map(idOf)]);
+		const preferredCuts = activeAnimeCutIds(current.seasons).filter(
+			(id) => !groupIds.has(id),
+		);
+		preferredCuts.push(chosenId);
 
-		// if progress needs moving
-		const currentWasReplaced =
-			current.cur_season_index === cut.active.anilistId;
-		const nextSeason = currentWasReplaced
-			? chosenId
-			: current.cur_season_index;
-		const nextEpisode = currentWasReplaced ? 0 : current.cur_episode;
+		const rebuilt = {};
+		const didRebuild = await applyAnimeChain(
+			rebuilt,
+			Number(current.tmdb_id),
+			preferredCuts,
+			false,
+		);
+		if (
+			!didRebuild ||
+			!Array.isArray(rebuilt.seasons) ||
+			!rebuilt.seasons.length
+		) {
+			await client.query("ROLLBACK");
+			return res.status(502).json({
+				success: false,
+				message: "Could not rebuild the anime chain for that cut",
+			});
+		}
 
-		// update db
+		const progress = progressAfterRebuild(
+			current,
+			rebuilt.seasons,
+			cut,
+			chosenId,
+		);
 		const updated = await client.query(
 			`UPDATE shows
-			 SET seasons=$1, cur_season_index=$2,
-			     cur_episode=$3, last_updated=NOW()
-			 WHERE id=$4 AND user_id=$5
+			 SET seasons=$1, anilist_id=$2, cur_season_index=$3,
+			     cur_episode=$4, last_updated=NOW()
+			 WHERE id=$5 AND user_id=$6
 			 RETURNING *`,
-			[JSON.stringify(seasons), nextSeason, nextEpisode, showId, userId],
+			[
+				JSON.stringify(rebuilt.seasons),
+				rebuilt.anilistId ?? current.anilist_id,
+				progress.seasonId,
+				progress.episode,
+				showId,
+				userId,
+			],
 		);
 		await client.query("COMMIT");
 
