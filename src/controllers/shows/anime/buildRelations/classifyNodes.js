@@ -70,6 +70,24 @@ export function isSameProduction(a, b) {
 	return short / long <= RECUT_RUNTIME_RATIO;
 }
 
+//
+export function remadeFrom(anime, spine, enrichedNodes) {
+	if (!canHoldSpine(anime)) return null;
+	let remade = null;
+	//
+	for (const edge of anime?.relations?.edges ?? []) {
+		if (edge.relationType !== "ALTERNATIVE") continue;
+		const otherId = edge.node?.id;
+		if (!spine.has(otherId)) continue;
+		const other = enrichedNodes.get(otherId);
+		if (!other || !canHoldSpine(other)) continue;
+		// one cut of one production, which is collapseAltCuts' call to make
+		if (isSameProduction(anime, other)) return null;
+		remade ??= otherId;
+	}
+	return remade;
+}
+
 // bootleged detected films are their own nodes -- not detected as real film
 export const continuesBroadcast = (anime) => {
 	const edges = anime?.relations?.edges ?? [];

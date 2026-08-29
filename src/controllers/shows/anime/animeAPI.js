@@ -16,6 +16,7 @@ import {
 	isFilm,
 	liftFilms,
 	offStory,
+	remadeFrom,
 	runsAsOwnSeries,
 } from "./buildRelations/classifyNodes.js";
 import { findByTmdb, getFribbMap } from "./externalCalls/fribbMap.js";
@@ -102,6 +103,21 @@ async function buildAnimeChain(
 	// PHASE 4: review shikimori | seperate
 	// no confirming edge is dropped
 	const anilistSpine = walkSpine(candidates, enrichedNodes, rootId);
+	// remake its own anime
+	for (const anilistId of [...candidates]) {
+		if (anilistId === rootId || anilistSpine.has(anilistId)) continue;
+		const anime = enrichedNodes.get(anilistId);
+		const remakes = remadeFrom(anime, anilistSpine, enrichedNodes);
+		if (remakes == null) continue;
+		//
+		candidates.delete(anilistId);
+		dropped.push(
+			shapeDropped(anime, anilistId, "separate production", {
+				shikimoriKind: kindByAnilist.get(anilistId) ?? null,
+				remakeOf: remakes,
+			}),
+		);
+	}
 	const { confirmed, rejected } = reviewCandidates(
 		candidates,
 		enrichedNodes,
