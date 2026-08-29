@@ -145,7 +145,7 @@ async function buildAnimeChain(
 		franchiseById,
 		fullFranchise,
 	);
-	hangFilms(spineFilms, fullFranchise);
+	hangFilms(spineFilms, fullFranchise, enrichedNodes);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
 

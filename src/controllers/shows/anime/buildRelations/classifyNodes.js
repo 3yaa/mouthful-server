@@ -57,16 +57,45 @@ export function liftFilms(fullFranchise, byAnilist) {
 	return films;
 }
 
-// attach it to the spine
-export function hangFilms(films, fullFranchise) {
+// attach film to the spine -- release date is fallback
+export function hangFilms(films, fullFranchise, enrichedNodes) {
 	if (!films.length || !fullFranchise.length) return;
-	//
+	const slotsById = new Map(
+		fullFranchise.map((slot) => [slot.anilistId, slot]),
+	);
+
 	for (const film of films) {
+		const edges =
+			enrichedNodes?.get(film.anilistId)?.relations?.edges ?? [];
+		const before = edges.find(
+			(edge) =>
+				edge.relationType === "SEQUEL" && slotsById.has(edge.node?.id),
+		);
+		if (before) {
+			slotsById.get(before.node.id).subNodes.push({
+				...film,
+				placement: "before",
+			});
+			continue;
+		}
+
+		const after = edges.find(
+			(edge) =>
+				edge.relationType === "PREQUEL" && slotsById.has(edge.node?.id),
+		);
+		if (after) {
+			slotsById.get(after.node.id).subNodes.push({
+				...film,
+				placement: "after",
+			});
+			continue;
+		}
+
 		let parent = fullFranchise[0];
 		for (const slot of fullFranchise) {
 			if (!slot.startDate || !film.startDate) continue;
 			if (slot.startDate <= film.startDate) parent = slot;
 		}
-		parent.subNodes.push(film);
+		parent.subNodes.push({ ...film, placement: "after" });
 	}
 }
