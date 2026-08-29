@@ -79,17 +79,7 @@ export function relateAdditional(
 			findDateParent(additional, mainlineNodes);
 		if (!parent) continue;
 
-		//
-		if (relationType === "ALTERNATIVE") {
-			// movie not another slot
-			const { kind, tmdbMovieId, ...variantMedia } = additional;
-			parent.variants.push({
-				...variantMedia,
-				variantKind: "alternate_cut",
-				relationType,
-			});
-		} else {
-			parent.subNodes.push({ ...additional, relationType });
-		}
+		// only a spine node can be an alt cut
+		parent.subNodes.push({ ...additional, relationType });
 	}
 }

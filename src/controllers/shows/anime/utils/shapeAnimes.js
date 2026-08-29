@@ -1,8 +1,20 @@
+const SOURCE_FORMAT = new Map([
+	["MANGA", "MANGA"],
+	["COMIC", "MANGA"],
+	["DOUJINSHI", "MANGA"],
+	["LIGHT_NOVEL", "NOVEL"],
+	["NOVEL", "NOVEL"],
+	["WEB_NOVEL", "NOVEL"],
+]);
+
 export function getMangaAdaptation(anime) {
-	const edge = (anime.relations?.edges ?? []).find(
+	const edges = (anime.relations?.edges ?? []).filter(
 		(edge) =>
 			edge.relationType === "ADAPTATION" && edge.node?.type === "MANGA",
 	);
+	const wanted = SOURCE_FORMAT.get(anime.source);
+	const edge =
+		(wanted && edges.find((e) => e.node?.format === wanted)) ?? edges[0];
 
 	if (!edge?.node) return null;
 

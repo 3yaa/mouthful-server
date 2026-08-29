@@ -4,6 +4,7 @@ const ANILIST_QUERY = `
       media(id_in: $ids, type: ANIME) {
         id
         format
+        source
         status
         episodes
         duration
