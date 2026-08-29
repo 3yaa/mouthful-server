@@ -149,8 +149,10 @@ export async function refreshFribbMap() {
 	return data;
 }
 
-// every AniList entry sitting under one TMDB id, ordered by season
+// every AniList entry sitting under one TMDB id, ordered by season.
+export const rowsFor = ({ byTmdb }, tmdbId, type = "tv") =>
+	byTmdb.get(`${type}:${Number(tmdbId)}`) ?? [];
+
 export async function findByTmdb(tmdbId, type = "tv") {
-	const { byTmdb } = await getFribbMap();
-	return byTmdb.get(`${type}:${Number(tmdbId)}`) ?? [];
+	return rowsFor(await getFribbMap(), tmdbId, type);
 }

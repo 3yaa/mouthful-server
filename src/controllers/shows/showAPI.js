@@ -4,6 +4,8 @@ import {
 	cutIdsFromQuery,
 	storedAnimeState,
 } from "./anime/utils/utilFunctions.js";
+import { runAnime } from "./anime/utils/isAnimeCheck.js";
+import { startAnimeChain } from "./anime/animeAPI.js";
 
 const sendError = (res, error) => {
 	console.error("Show fetch failed: ", error);
@@ -19,12 +21,17 @@ const sendError = (res, error) => {
 
 export async function useShowAPI(req, res) {
 	try {
-		const detected = await getTmdbId(
+		// uses to search
+		const { searchSaysAnime, ...detected } = await getTmdbId(
 			req.query.title,
 			req.query.year,
 			req.user.id,
 			req.query.forceAnime,
 		);
+		// run anime chain concurrently
+		const pending = searchSaysAnime
+			? startAnimeChain(detected.tmdbId, [], false)
+			: null;
 		const enriched = await getTmdbShowEnrichment(detected.tmdbId);
 		await applyAnime(
 			enriched.processedShow,
@@ -33,6 +40,7 @@ export async function useShowAPI(req, res) {
 			enriched.wantAnime,
 			[],
 			false,
+			pending,
 		);
 		res.json({
 			success: true,
@@ -47,20 +55,26 @@ export async function useShowRefreshAPI(req, res) {
 	try {
 		const tmdbId = Number(req.query.tmdbId);
 		const storedAnime = await storedAnimeState(req.user.id, tmdbId);
-		const enriched = await getTmdbShowEnrichment(tmdbId);
 		const requestedCuts = cutIdsFromQuery(req.query.cuts);
 		const preferredCuts = storedAnime?.cuts.length
 			? storedAnime.cuts
 			: requestedCuts;
-
+		const refresh = req.query.refresh === "1";
+		//
+		const pending = runAnime(req.query.forceAnime, Boolean(storedAnime))
+			? startAnimeChain(tmdbId, preferredCuts, refresh)
+			: null;
+		const enriched = await getTmdbShowEnrichment(tmdbId);
 		await applyAnime(
 			enriched.processedShow,
 			tmdbId,
 			req.query.forceAnime,
 			enriched.wantAnime || Boolean(storedAnime),
 			preferredCuts,
-			req.query.refresh === "1",
+			refresh,
+			pending,
 		);
+		//
 		res.json({
 			success: true,
 			data: { title: null, tmdbId, ...enriched.processedShow },

@@ -36,9 +36,8 @@ export function walkSpine(candidates, enrichedNodes, rootId) {
 
 	const spine = new Set([rootId]);
 	const queue = [rootId];
-	//
-	while (queue.length > 0) {
-		for (const neighbour of linked.get(queue.shift()) ?? []) {
+	for (let at = 0; at < queue.length; at++) {
+		for (const neighbour of linked.get(queue[at]) ?? []) {
 			if (spine.has(neighbour)) continue;
 			//
 			spine.add(neighbour);
@@ -54,6 +53,15 @@ export function reviewCandidates(candidates, enrichedNodes, spine) {
 	const confirmed = new Set(spine);
 	const rejected = new Set();
 
+	// everything the spine vouches for, collected in one pass
+	const vouchedBySpine = new Set();
+	for (const spineId of spine) {
+		for (const edge of edgesOf(enrichedNodes.get(spineId))) {
+			if (!CONFIRM_RELATIONS.has(edge.relationType)) continue;
+			if (edge.node?.id != null) vouchedBySpine.add(edge.node.id);
+		}
+	}
+
 	for (const anilistId of candidates) {
 		if (confirmed.has(anilistId)) continue;
 		const node = enrichedNodes.get(anilistId);
@@ -62,20 +70,13 @@ export function reviewCandidates(candidates, enrichedNodes, spine) {
 			continue;
 		}
 		// spine wins
-		const fromSpine = [...spine].some((spineId) =>
-			edgesOf(enrichedNodes.get(spineId)).some(
-				(edge) =>
-					edge.node?.id === anilistId &&
-					CONFIRM_RELATIONS.has(edge.relationType),
-			),
-		);
 		const fromNode = edgesOf(node).some(
 			(edge) =>
 				spine.has(edge.node?.id) &&
 				CONFIRM_RELATIONS.has(edge.relationType),
 		);
 
-		if (fromSpine || fromNode) confirmed.add(anilistId);
+		if (vouchedBySpine.has(anilistId) || fromNode) confirmed.add(anilistId);
 		else rejected.add(anilistId);
 	}
 

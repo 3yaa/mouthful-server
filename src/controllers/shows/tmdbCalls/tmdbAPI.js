@@ -22,7 +22,7 @@ export const getCreator = (show) =>
 	(show.created_by ?? []).map((c) => c.name).join(", ") || null;
 
 // base call
-async function tmdbFetch(path, params = {}) {
+export async function tmdbFetch(path, params = {}) {
 	const query = new URLSearchParams({
 		api_key: process.env.TMDB_API_KEY,
 		...params,
@@ -45,11 +45,10 @@ export async function getTmdbId(title, year, userId, forceAnime) {
 		year ? { query: title, first_air_date_year: year } : { query: title },
 	);
 	const results = data.results ?? [];
+	const searchSaysAnime = runAnime(forceAnime, isAnime(results[0]));
 	// for anime go thru to find main node
 	const show =
-		(runAnime(forceAnime, isAnime(results[0]))
-			? await pickAnimeResult(results)
-			: null) ?? results[0];
+		(searchSaysAnime ? await pickAnimeResult(results) : null) ?? results[0];
 	if (!show) {
 		throw apiError(404, `No show found for "${title}"`, "No show results");
 	}
@@ -63,7 +62,7 @@ export async function getTmdbId(title, year, userId, forceAnime) {
 			showDetect,
 		);
 	}
-	return showDetect;
+	return { ...showDetect, searchSaysAnime };
 }
 
 // --- 2nd call

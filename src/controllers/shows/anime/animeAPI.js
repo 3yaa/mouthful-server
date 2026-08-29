@@ -21,7 +21,7 @@ import {
 	remadeFrom,
 	runsAsOwnSeries,
 } from "./buildRelations/classifyNodes.js";
-import { findByTmdb, getFribbMap } from "./externalCalls/fribbMap.js";
+import { getFribbMap, rowsFor } from "./externalCalls/fribbMap.js";
 import { applyPartsForSeason } from "./utils/parseParts.js";
 import {
 	getMangaAdaptation,
@@ -38,8 +38,8 @@ async function buildAnimeChain(
 	preferredCuts = [],
 	forceRefresh = false,
 ) {
-	const rows = await findByTmdb(tmdbId, "tv");
-	const rootRow = pickRoot(rows);
+	const fribb = await getFribbMap();
+	const rootRow = pickRoot(rowsFor(fribb, tmdbId, "tv"));
 	if (!rootRow) return null;
 
 	// PHASE 1: get the shikimori's nodes and links
@@ -63,7 +63,7 @@ async function buildAnimeChain(
 	// shikimori's own label for each node
 	const kindByAnilist = new Map();
 	//
-	const { byMal, byAnilist } = await getFribbMap();
+	const { byMal, byAnilist } = fribb;
 	for (const node of graph.nodes) {
 		const malId = Number(node.id);
 		const fribbData = byMal.get(malId);
@@ -202,11 +202,6 @@ async function buildAnimeChain(
 		dropped,
 	);
 	fullFranchise.sort(compareStartDate);
-	// add source manga to tree
-	const rootNode = franchiseById.get(rootId);
-	if (rootNode) {
-		rootNode.sourceManga = getMangaAdaptation(rootAnime);
-	}
 	// relate additional onto parent
 	const relationIndex = buildRelationIndex(
 		spineIds,
@@ -226,12 +221,13 @@ async function buildAnimeChain(
 	hangFilms(spineFilms, fullFranchise, enrichedNodes);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
-	//
-	if (dropped.length) {
-		const rootSlot =
-			fullFranchise.find((slot) => slot.anilistId === rootId) ??
-			fullFranchise[0];
-		if (rootSlot) rootSlot.droppedNodes = dropped;
+	// what rides on the root
+	const rootSlot =
+		fullFranchise.find((slot) => slot.anilistId === rootId) ??
+		fullFranchise[0];
+	if (rootSlot) {
+		rootSlot.sourceManga = getMangaAdaptation(rootAnime);
+		if (dropped.length) rootSlot.droppedNodes = dropped;
 	}
 
 	return {
@@ -243,31 +239,45 @@ async function buildAnimeChain(
 	};
 }
 
+export async function startAnimeChain(
+	tmdb,
+	preferredCuts = [],
+	forceRefresh = false,
+) {
+	try {
+		return await buildAnimeChain(tmdb, preferredCuts, forceRefresh);
+	} catch (error) {
+		console.error("Anime chain failed: ", error.message);
+		return null;
+	}
+}
+
+export function applyChain(processedShow, chain) {
+	if (!chain?.fullFranchise?.length) return false;
+	const { root, fullFranchise } = chain;
+
+	// anime specific attributes
+	processedShow.anilistId = root.anilistId;
+	processedShow.seasons = fullFranchise;
+	if (root?.studio) processedShow.creator = root.studio;
+	// sends both tmdb and anilist posters
+	const cover = root?.posterUrl ?? fullFranchise[0]?.posterUrl;
+	const posters = processedShow.posters ?? [];
+	if (cover && !posters.includes(cover)) {
+		processedShow.posters = [...posters, cover];
+	}
+
+	return true;
+}
+
 export async function applyAnimeChain(
 	processedShow,
 	tmdb,
 	preferredCuts = [],
 	forceRefresh = false,
 ) {
-	try {
-		const chain = await buildAnimeChain(tmdb, preferredCuts, forceRefresh);
-		if (!chain?.fullFranchise?.length) return false;
-		const { root, fullFranchise, dropped } = chain;
-
-		// anime specific attributes
-		processedShow.anilistId = root.anilistId;
-		processedShow.seasons = fullFranchise;
-		if (root?.studio) processedShow.creator = root.studio;
-		// sends both tmdb and anilist posters
-		const cover = root?.posterUrl ?? fullFranchise[0]?.posterUrl;
-		const posters = processedShow.posters ?? [];
-		if (cover && !posters.includes(cover)) {
-			processedShow.posters = [...posters, cover];
-		}
-
-		return true;
-	} catch (error) {
-		console.error("Anime chain failed: ", error.message);
-		return false;
-	}
+	return applyChain(
+		processedShow,
+		await startAnimeChain(tmdb, preferredCuts, forceRefresh),
+	);
 }

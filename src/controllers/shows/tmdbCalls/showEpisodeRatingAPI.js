@@ -2,24 +2,19 @@ import { getShowEpisodes } from "../../imdbRating/imdbEpRatingCache.js";
 import { getImdbRatings } from "../../imdbRating/imdbRatingCache.js";
 import { pool } from "../../../config/db.js";
 import dotenv from "dotenv";
-import { httpFetch } from "../../utils/httpFetch.js";
+import { tmdbFetch } from "./tmdbAPI.js";
 
 dotenv.config();
 
 async function resolveImdbId(imdbId, tmdbId, showId, userId) {
 	if (imdbId) return imdbId;
 
-	const res = await httpFetch(
-		`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids`,
-	);
-	if (!res.ok) throw new Error(`TMDB external_ids HTTP ${res.status}`);
-	const data = await res.json();
+	const data = await tmdbFetch(`/tv/${tmdbId}`, {
+		append_to_response: "external_ids",
+	});
 	const fetched = data.external_ids?.imdb_id;
 	if (!fetched) throw new Error("No IMDB ID found for this show");
-
-	// showId comes off the query string, so the row has to be scoped to the
-	// caller -- without user_id this backfills whatever row the id names,
-	// including someone else's
+	//
 	if (showId) {
 		await pool.query(
 			"UPDATE shows SET imdb_id=$1 WHERE id=$2 AND user_id=$3",

@@ -1,7 +1,7 @@
 import { pool } from "../../../../config/db.js";
 import { runAnime } from "./isAnimeCheck.js";
-import { applyAnimeChain } from "../animeAPI.js";
-import { findByTmdb } from "../externalCalls/fribbMap.js";
+import { applyChain, startAnimeChain } from "../animeAPI.js";
+import { getFribbMap, rowsFor } from "../externalCalls/fribbMap.js";
 
 export function pickRoot(rows) {
 	// make sure mal id exists
@@ -16,8 +16,9 @@ export function pickRoot(rows) {
 
 // walk tmdb series for the original
 export async function pickAnimeResult(results) {
+	const fribb = await getFribbMap();
 	for (const result of results ?? []) {
-		if (pickRoot(await findByTmdb(result.id, "tv"))) return result;
+		if (pickRoot(rowsFor(fribb, result.id, "tv"))) return result;
 	}
 	return null;
 }
@@ -92,10 +93,14 @@ export async function applyAnime(
 	detected,
 	cuts,
 	refresh,
+	pending,
 ) {
 	if (!runAnime(forceAnime, detected)) return;
 	try {
-		await applyAnimeChain(processedShow, tmdbId, cuts, refresh);
+		const chain = pending
+			? await pending
+			: await startAnimeChain(tmdbId, cuts, refresh);
+		applyChain(processedShow, chain);
 	} catch (error) {
 		// anime enrichment is non-blocking; TMDB still gives a usable row.
 		console.error("Anime chain failed: ", error.message);
