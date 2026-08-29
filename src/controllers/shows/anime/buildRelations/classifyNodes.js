@@ -24,6 +24,11 @@ export function offStory(anime, shikimoriKind) {
 	return shikimoriKind === "Реклама" ? "advert" : "promo";
 }
 
+// if a mainnode is too big dont want other main nodes
+const OWN_SERIES_EPISODES = 80;
+export const runsAsOwnSeries = (anime) =>
+	(anime?.episodes ?? 0) > OWN_SERIES_EPISODES;
+
 // bootleged detected films are their own nodes -- not detected as real film
 export const continuesBroadcast = (anime) => {
 	const edges = anime?.relations?.edges ?? [];
