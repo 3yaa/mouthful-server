@@ -10,6 +10,7 @@ import {
 import { collapseAltCuts } from "./buildRelations/spineNodesAlts.js";
 import {
 	canHoldSpine,
+	continuesChain,
 	filmTmdbId,
 	hangFilms,
 	isFeature,
@@ -156,7 +157,10 @@ async function buildAnimeChain(
 		const onSpine =
 			anilistSpine.has(anilistId) &&
 			!summaryTargets.has(anilistId) &&
-			(anilistId === rootId || canHoldSpine(anime) || isFeature(anime));
+			(anilistId === rootId ||
+				canHoldSpine(anime) ||
+				isFeature(anime) ||
+				continuesChain(anime));
 		if (onSpine) spineIds.add(anilistId);
 		else additionalIds.add(anilistId);
 	}

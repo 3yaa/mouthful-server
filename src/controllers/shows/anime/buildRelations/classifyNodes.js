@@ -88,6 +88,19 @@ export function remadeFrom(anime, spine, enrichedNodes) {
 	return remade;
 }
 
+// continues main node chain
+export function continuesChain(anime) {
+	// remove unaired
+	if (!anime?.format) return false;
+	const edges = anime.relations?.edges ?? [];
+	if (edges.some((edge) => edge.relationType === "PARENT")) return false;
+	//
+	return edges.some(
+		(edge) =>
+			edge.relationType === "PREQUEL" && edge.node?.type === "ANIME",
+	);
+}
+
 // bootleged detected films are their own nodes -- not detected as real film
 export const continuesBroadcast = (anime) => {
 	const edges = anime?.relations?.edges ?? [];
@@ -115,7 +128,8 @@ export function filmTmdbId(anime, byAnilist) {
 
 // film only animes stay as slot -- homeless
 export function liftFilms(fullFranchise, byAnilist) {
-	const isMovie = (slot) => slot.format === "MOVIE";
+	const isMovie = (slot) =>
+		slot.format === "MOVIE" || filmTmdbId(slot, byAnilist) != null;
 	const episodic = fullFranchise.filter((slot) => !isMovie(slot));
 	if (!episodic.length) return [];
 	//
