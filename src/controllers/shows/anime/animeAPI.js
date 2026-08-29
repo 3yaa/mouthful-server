@@ -14,6 +14,7 @@ import {
 	hangFilms,
 	isFilm,
 	liftFilms,
+	offStory,
 } from "./buildRelations/classifyNodes.js";
 import { findByTmdb, getFribbMap } from "./externalCalls/fribbMap.js";
 import { applyPartsForSeason } from "./utils/parseParts.js";
@@ -51,6 +52,8 @@ async function buildAnimeChain(
 	const candidates = new Set();
 	const untranslated = [];
 	let rootId = null;
+	// shikimori's own label for each node
+	const kindByAnilist = new Map();
 	//
 	const { byMal, byAnilist } = await getFribbMap();
 	for (const node of graph.nodes) {
@@ -65,6 +68,7 @@ async function buildAnimeChain(
 		const anilistId = Number(fribbData.anilistId);
 		if (malId === rootMalId) rootId = anilistId;
 		candidates.add(anilistId);
+		kindByAnilist.set(anilistId, node.kind ?? null);
 	}
 	if (rootId == null) return null;
 
@@ -72,6 +76,33 @@ async function buildAnimeChain(
 	const enrichedNodes = await fetchAnilist([...candidates], forceRefresh);
 	const rootAnime = enrichedNodes.get(rootId);
 	if (!rootAnime) return null;
+
+	// PHASE 3.5: drop useless additionals
+	const dropped = [];
+	for (const anilistId of [...candidates]) {
+		if (anilistId === rootId) continue;
+		const anime = enrichedNodes.get(anilistId);
+		const reason = offStory(anime, kindByAnilist.get(anilistId));
+		if (!reason) continue;
+		//
+		candidates.delete(anilistId);
+		dropped.push({
+			anilistId,
+			title: anime?.title?.romaji ?? anime?.title?.english ?? null,
+			format: anime?.format ?? null,
+			duration: anime?.duration ?? null,
+			shikimoriKind: kindByAnilist.get(anilistId) ?? null,
+			reason,
+		});
+	}
+	if (dropped.length) {
+		console.log(
+			`Anime chain ${tmdbId}: off-story dropped -- ` +
+				dropped
+					.map((d) => `${d.title} (${d.format}, ${d.reason})`)
+					.join(", "),
+		);
+	}
 
 	// PHASE 4: review shikimori | seperate
 	// no confirming edge is dropped
@@ -168,6 +199,7 @@ async function buildAnimeChain(
 		fullFranchise,
 		missingFromAnilist,
 		untranslated,
+		dropped,
 	};
 }
 

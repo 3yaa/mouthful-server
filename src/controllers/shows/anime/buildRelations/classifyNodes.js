@@ -13,6 +13,17 @@ export const isFeature = (anime) =>
 		(anime?.duration ?? 0) >= FEATURE_MINUTES &&
 		(anime?.episodes ?? 1) <= 1);
 
+// music video, advert, trailers -- this is a hint
+const OFF_STORY_KINDS = new Set(["Клип", "Реклама", "Проморолик"]);
+const OFF_STORY_MINUTES = 10;
+export function offStory(anime, shikimoriKind) {
+	if (anime?.format === "MUSIC") return "music video";
+	if (!OFF_STORY_KINDS.has(shikimoriKind)) return null;
+	if (anime?.format === "TV" || anime?.format === "MOVIE") return null;
+	if ((anime?.duration ?? 0) > OFF_STORY_MINUTES) return null;
+	return shikimoriKind === "Реклама" ? "advert" : "promo";
+}
+
 // bootleged detected films are their own nodes -- not detected as real film
 export const continuesBroadcast = (anime) => {
 	const edges = anime?.relations?.edges ?? [];
