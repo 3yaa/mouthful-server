@@ -12,6 +12,7 @@ import {
 	canHoldSpine,
 	filmTmdbId,
 	hangFilms,
+	isRecapOf,
 	isFilm,
 	liftFilms,
 	offStory,
@@ -23,6 +24,8 @@ import {
 	getMangaAdaptation,
 	shapeAnime,
 	shapeAnimeGroup,
+	shapeDropped,
+	shapeUntranslated,
 } from "./utils/shapeAnimes.js";
 import { compareStartDate, pickRoot } from "./utils/utilFunctions.js";
 import { shikimoriQuery } from "./externalCalls/shikimoriAPI.js";
@@ -50,6 +53,7 @@ async function buildAnimeChain(
 	};
 
 	// PHASE 2: link to anilist
+	const dropped = [];
 	const candidates = new Set();
 	const untranslated = [];
 	let rootId = null;
@@ -63,6 +67,7 @@ async function buildAnimeChain(
 		//
 		if (!fribbData || fribbData.anilistId == null) {
 			untranslated.push(node);
+			dropped.push(shapeUntranslated(node));
 			continue;
 		}
 		//
@@ -79,7 +84,6 @@ async function buildAnimeChain(
 	if (!rootAnime) return null;
 
 	// PHASE 3.5: drop useless additionals and also removes main nodes if its too big to exist together
-	const dropped = [];
 	for (const anilistId of [...candidates]) {
 		if (anilistId === rootId) continue;
 		const anime = enrichedNodes.get(anilistId);
@@ -89,34 +93,41 @@ async function buildAnimeChain(
 		if (!reason) continue;
 		//
 		candidates.delete(anilistId);
-		dropped.push({
-			anilistId,
-			title: anime?.title?.romaji ?? anime?.title?.english ?? null,
-			format: anime?.format ?? null,
-			episodes: anime?.episodes ?? null,
-			duration: anime?.duration ?? null,
-			shikimoriKind: kindByAnilist.get(anilistId) ?? null,
-			reason,
-		});
+		dropped.push(
+			shapeDropped(anime, anilistId, reason, {
+				shikimoriKind: kindByAnilist.get(anilistId) ?? null,
+			}),
+		);
 	}
 	// PHASE 4: review shikimori | seperate
 	// no confirming edge is dropped
 	const anilistSpine = walkSpine(candidates, enrichedNodes, rootId);
-	const { confirmed } = reviewCandidates(
+	const { confirmed, rejected } = reviewCandidates(
 		candidates,
 		enrichedNodes,
 		anilistSpine,
 	);
+	// shikimori owned -- anilist can't find no edge
+	for (const anilistId of rejected) {
+		dropped.push(
+			shapeDropped(
+				enrichedNodes.get(anilistId),
+				anilistId,
+				"no link to the chain",
+				{ shikimoriKind: kindByAnilist.get(anilistId) ?? null },
+			),
+		);
+	}
 	// a subnode can sometimes carry prequel/sequel (jjk execution bridges s2 and s3)
 	const summaryTargets = new Set();
 	for (const anime of enrichedNodes.values()) {
 		for (const edge of anime?.relations?.edges ?? []) {
-			if (
-				edge.relationType === "SUMMARY" &&
-				confirmed.has(edge.node?.id)
-			) {
-				summaryTargets.add(edge.node.id);
-			}
+			if (edge.relationType !== "SUMMARY") continue;
+			const targetId = edge.node?.id;
+			if (!confirmed.has(targetId)) continue;
+			//
+			if (!isRecapOf(enrichedNodes.get(targetId), anime)) continue;
+			summaryTargets.add(targetId);
 		}
 	}
 
@@ -148,6 +159,10 @@ async function buildAnimeChain(
 		false,
 		missingFromAnilist,
 	);
+	//
+	for (const anilistId of missingFromAnilist) {
+		dropped.push(shapeDropped(null, anilistId, "not on anilist"));
+	}
 	// check what kinda additional they are
 	for (const additional of additionalAnime) {
 		const node = enrichedNodes.get(additional.anilistId);
@@ -163,6 +178,7 @@ async function buildAnimeChain(
 		enrichedNodes,
 		rootId,
 		preferredCuts,
+		dropped,
 	);
 	fullFranchise.sort(compareStartDate);
 	// add source manga to tree
@@ -170,9 +186,6 @@ async function buildAnimeChain(
 	if (rootNode) {
 		rootNode.sourceManga = getMangaAdaptation(rootAnime);
 	}
-	// films are not a slot
-	const spineFilms = liftFilms(fullFranchise, byAnilist);
-
 	// relate additional onto parent
 	const relationIndex = buildRelationIndex(
 		spineIds,
@@ -184,7 +197,12 @@ async function buildAnimeChain(
 		relationIndex,
 		franchiseById,
 		fullFranchise,
+		enrichedNodes,
+		dropped,
 	);
+
+	// films are not a slot
+	const spineFilms = liftFilms(fullFranchise, byAnilist);
 	hangFilms(spineFilms, fullFranchise, enrichedNodes);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
@@ -207,7 +225,7 @@ export async function applyAnimeChain(
 	try {
 		const chain = await buildAnimeChain(tmdb, preferredCuts, forceRefresh);
 		if (!chain?.fullFranchise?.length) return false;
-		const { root, fullFranchise } = chain;
+		const { root, fullFranchise, dropped } = chain;
 
 		// anime specific attributes
 		processedShow.isAnime = true;
@@ -215,6 +233,8 @@ export async function applyAnimeChain(
 		processedShow.titleRomaji = root.titleRomaji;
 		processedShow.seasons = fullFranchise;
 		if (root?.studio) processedShow.creator = root.studio;
+		//
+		if (dropped?.length) processedShow.droppedNodes = dropped;
 		// sends both tmdb and anilist posters
 		const cover = root?.posterUrl ?? fullFranchise[0]?.posterUrl;
 		const posters = processedShow.posters ?? [];

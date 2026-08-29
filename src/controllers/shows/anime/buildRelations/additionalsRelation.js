@@ -1,4 +1,12 @@
+import { isRecapOf } from "./classifyNodes.js";
+
+const RECUT_RELATIONS = new Set(["SUMMARY", "ALTERNATIVE"]);
 const NOISE_RELATIONS = new Set(["SUMMARY", "CHARACTER", "OTHER"]);
+const NOISE_REASON = new Map([
+	["SUMMARY", "recap"],
+	["CHARACTER", "character short"],
+	["OTHER", "unrelated"],
+]);
 
 export function buildRelationIndex(mainlineIds, additionalIds, enrichedNodes) {
 	const index = new Map();
@@ -61,6 +69,8 @@ export function relateAdditional(
 	relationIndex,
 	mainlineById,
 	mainlineNodes,
+	enrichedNodes,
+	dropped = [],
 ) {
 	for (const additional of additionalAnime) {
 		const relation = pickRelation(relationIndex.get(additional.anilistId));
@@ -70,6 +80,11 @@ export function relateAdditional(
 			NOISE_RELATIONS.has(relationType) &&
 			!(relationType === "SUMMARY" && additional.kind === "film")
 		) {
+			dropped.push({
+				...additional,
+				relationType,
+				reason: NOISE_REASON.get(relationType) ?? "unrelated",
+			});
 			continue;
 		}
 
@@ -77,7 +92,29 @@ export function relateAdditional(
 		const parent =
 			mainlineById.get(relation?.parentId) ??
 			findDateParent(additional, mainlineNodes);
-		if (!parent) continue;
+		// no slot to hang from
+		if (!parent) {
+			dropped.push({ ...additional, relationType, reason: "no parent" });
+			continue;
+		}
+
+		// for cases like jjk execuation -- recap + early screening
+		if (
+			additional.kind === "film" &&
+			RECUT_RELATIONS.has(relationType) &&
+			isRecapOf(
+				enrichedNodes?.get(additional.anilistId),
+				enrichedNodes?.get(relation.parentId),
+			)
+		) {
+			dropped.push({
+				...additional,
+				relationType,
+				reason: "recut",
+				recutOf: parent.anilistId,
+			});
+			continue;
+		}
 
 		// only a spine node can be an alt cut
 		parent.subNodes.push({ ...additional, relationType });

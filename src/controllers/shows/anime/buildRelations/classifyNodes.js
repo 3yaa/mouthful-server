@@ -29,6 +29,47 @@ const OWN_SERIES_EPISODES = 80;
 export const runsAsOwnSeries = (anime) =>
 	(anime?.episodes ?? 0) > OWN_SERIES_EPISODES;
 
+//
+function measuredMinutes(anime) {
+	const duration = anime?.duration;
+	if (!duration) return null;
+	if (anime.episodes == null)
+		return anime.format === "MOVIE" ? duration : null;
+	return anime.episodes * duration;
+}
+
+// if
+const RECUT_RUNTIME_RATIO = 0.6;
+export function isRecapOf(candidate, part) {
+	if (candidate?.format === "TV") return false;
+	const recap = measuredMinutes(candidate);
+	const whole = measuredMinutes(part);
+	//
+	if (recap == null || whole == null) return false;
+	return recap / whole <= RECUT_RUNTIME_RATIO;
+}
+
+const REMAKE_GAP_YEARS = 4;
+
+// ALTERNATIVE that are too big to be alternatives
+export function isSameProduction(a, b) {
+	if (!a || !b) return false;
+	const yearA = a.startDate?.year;
+	const yearB = b.startDate?.year;
+	// no date is no way to tell a recut from a remake -- keep them apart
+	if (!yearA || !yearB) return false;
+	if (Math.abs(yearA - yearB) > REMAKE_GAP_YEARS) return false;
+	// season and the film cut out of it while it aired
+	if ((a.format === "MOVIE") !== (b.format === "MOVIE")) return true;
+	//
+	const minutesA = measuredMinutes(a);
+	const minutesB = measuredMinutes(b);
+	if (minutesA == null || minutesB == null) return false;
+	const short = Math.min(minutesA, minutesB);
+	const long = Math.max(minutesA, minutesB);
+	return short / long <= RECUT_RUNTIME_RATIO;
+}
+
 // bootleged detected films are their own nodes -- not detected as real film
 export const continuesBroadcast = (anime) => {
 	const edges = anime?.relations?.edges ?? [];
@@ -56,12 +97,13 @@ export function filmTmdbId(anime, byAnilist) {
 
 // film only animes stay as slot -- homeless
 export function liftFilms(fullFranchise, byAnilist) {
-	const episodic = fullFranchise.filter((slot) => !slot.isMovie);
+	const isMovie = (slot) => slot.format === "MOVIE";
+	const episodic = fullFranchise.filter((slot) => !isMovie(slot));
 	if (!episodic.length) return [];
 	//
 	const films = fullFranchise
-		.filter((slot) => slot.isMovie)
-		.map(({ subNodes, position, number, sourceManga, ...film }) => ({
+		.filter(isMovie)
+		.map(({ position, number, sourceManga, ...film }) => ({
 			...film,
 			kind: "film",
 			isMainLine: true,
@@ -79,6 +121,12 @@ export function hangFilms(films, fullFranchise, enrichedNodes) {
 	const slotsById = new Map(
 		fullFranchise.map((slot) => [slot.anilistId, slot]),
 	);
+	// ova that hung off film hangs off the film's host slot
+	const hang = (slot, film, placement) => {
+		const { subNodes = [], ...rest } = film;
+		slot.subNodes.push({ ...rest, placement });
+		slot.subNodes.push(...subNodes);
+	};
 
 	for (const film of films) {
 		const edges =
@@ -88,10 +136,7 @@ export function hangFilms(films, fullFranchise, enrichedNodes) {
 				edge.relationType === "SEQUEL" && slotsById.has(edge.node?.id),
 		);
 		if (before) {
-			slotsById.get(before.node.id).subNodes.push({
-				...film,
-				placement: "before",
-			});
+			hang(slotsById.get(before.node.id), film, "before");
 			continue;
 		}
 
@@ -100,10 +145,7 @@ export function hangFilms(films, fullFranchise, enrichedNodes) {
 				edge.relationType === "PREQUEL" && slotsById.has(edge.node?.id),
 		);
 		if (after) {
-			slotsById.get(after.node.id).subNodes.push({
-				...film,
-				placement: "after",
-			});
+			hang(slotsById.get(after.node.id), film, "after");
 			continue;
 		}
 
@@ -112,6 +154,6 @@ export function hangFilms(films, fullFranchise, enrichedNodes) {
 			if (!slot.startDate || !film.startDate) continue;
 			if (slot.startDate <= film.startDate) parent = slot;
 		}
-		parent.subNodes.push({ ...film, placement: "after" });
+		hang(parent, film, "after");
 	}
 }

@@ -1,3 +1,5 @@
+import { isSameProduction } from "./classifyNodes.js";
+
 const LEAD_FORMAT_PRIORITY = new Map([
 	["TV", 0],
 	["ONA", 1],
@@ -19,6 +21,8 @@ function relateAltCuts(mainlineIds, enrichedNodes) {
 			const otherId = edge.node?.id;
 			// only looking at spine items
 			if (!mainlineIds.has(otherId)) continue;
+			// ALTERNATIVE also links a remake to its original
+			if (!isSameProduction(anime, enrichedNodes.get(otherId))) continue;
 			// do both if if one side is missing its fills
 			alts.get(id).add(otherId);
 			alts.get(otherId).add(id);
@@ -69,7 +73,9 @@ function pickDefaultCuts(
 		const picked = altCutsAnime.find((id) => preferredCuts.has(id));
 		let leadId =
 			picked ??
-			(altCutsAnime.includes(rootAnilistId) ? rootAnilistId : altCutsAnime[0]);
+			(altCutsAnime.includes(rootAnilistId)
+				? rootAnilistId
+				: altCutsAnime[0]);
 		// user choice wins, including the root cut.
 		if (picked == null && leadId !== rootAnilistId) {
 			for (let i = 1; i < altCutsAnime.length; i++) {
@@ -101,6 +107,7 @@ export function collapseAltCuts(
 	enrichedNodes,
 	rootAnilistId,
 	preferredCuts = [],
+	dropped = [],
 ) {
 	const collapsed = [];
 	const franchiseById = new Map();
@@ -118,7 +125,11 @@ export function collapseAltCuts(
 	for (const anime of mainline) {
 		const leadId = leadById.get(anime.anilistId) ?? anime.anilistId;
 		const lead = shapedById.get(leadId);
-		if (!lead) continue;
+		//
+		if (!lead) {
+			dropped.push({ ...anime, reason: "lost cut" });
+			continue;
+		}
 		// lead id and variant ids resolve to lead obj
 		franchiseById.set(anime.anilistId, lead);
 		// remove the alternative from mainline nodes

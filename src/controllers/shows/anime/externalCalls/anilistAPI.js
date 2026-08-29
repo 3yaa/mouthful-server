@@ -8,8 +8,6 @@ const ANILIST_QUERY = `
         status
         episodes
         duration
-        season
-        seasonYear
         countryOfOrigin
 
         title { romaji english native }
