@@ -12,6 +12,7 @@ import {
 	canHoldSpine,
 	filmTmdbId,
 	hangFilms,
+	isFeature,
 	isRecapOf,
 	isFilm,
 	liftFilms,
@@ -155,7 +156,7 @@ async function buildAnimeChain(
 		const onSpine =
 			anilistSpine.has(anilistId) &&
 			!summaryTargets.has(anilistId) &&
-			(anilistId === rootId || canHoldSpine(anime));
+			(anilistId === rootId || canHoldSpine(anime) || isFeature(anime));
 		if (onSpine) spineIds.add(anilistId);
 		else additionalIds.add(anilistId);
 	}

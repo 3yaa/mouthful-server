@@ -81,7 +81,7 @@ export function remadeFrom(anime, spine, enrichedNodes) {
 		if (!spine.has(otherId)) continue;
 		const other = enrichedNodes.get(otherId);
 		if (!other || !canHoldSpine(other)) continue;
-		// one cut of one production, which is collapseAltCuts' call to make
+		// one cut of one production
 		if (isSameProduction(anime, other)) return null;
 		remade ??= otherId;
 	}
