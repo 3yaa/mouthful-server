@@ -81,6 +81,19 @@ async function buildAnimeChain(
 		enrichedNodes,
 		anilistSpine,
 	);
+	// a subnode can sometimes carry prequel/sequel (jjk execution bridges s2 and s3)
+	const summaryTargets = new Set();
+	for (const anime of enrichedNodes.values()) {
+		for (const edge of anime?.relations?.edges ?? []) {
+			if (
+				edge.relationType === "SUMMARY" &&
+				confirmed.has(edge.node?.id)
+			) {
+				summaryTargets.add(edge.node.id);
+			}
+		}
+	}
+
 	// classify nodes
 	const spineIds = new Set();
 	const additionalIds = new Set();
@@ -88,6 +101,7 @@ async function buildAnimeChain(
 		const anime = enrichedNodes.get(anilistId);
 		const onSpine =
 			anilistSpine.has(anilistId) &&
+			!summaryTargets.has(anilistId) &&
 			(anilistId === rootId || canHoldSpine(anime));
 		if (onSpine) spineIds.add(anilistId);
 		else additionalIds.add(anilistId);

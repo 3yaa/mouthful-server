@@ -65,7 +65,13 @@ export function relateAdditional(
 	for (const additional of additionalAnime) {
 		const relation = pickRelation(relationIndex.get(additional.anilistId));
 		const relationType = relation?.relationType ?? null;
-		if (NOISE_RELATIONS.has(relationType)) continue;
+		// declared summary is not a spine part
+		if (
+			NOISE_RELATIONS.has(relationType) &&
+			!(relationType === "SUMMARY" && additional.kind === "film")
+		) {
+			continue;
+		}
 
 		// pick what the parent node is
 		const parent =
