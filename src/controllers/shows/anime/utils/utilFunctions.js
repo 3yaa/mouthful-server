@@ -54,6 +54,26 @@ export function activeAnimeCutIds(seasons) {
 		.filter((id) => Number.isSafeInteger(id) && id > 0);
 }
 
+export const idOf = (item) => Number(item?.anilistId);
+
+//
+export function positionsOf(seasons, hiddenSides) {
+	// numbers on both sides
+	const hidden = new Set((hiddenSides ?? []).map(Number));
+	const out = [];
+	for (const season of seasons ?? []) {
+		out.push(season);
+		for (const subNode of season?.subNodes ?? []) {
+			if (
+				subNode?.kind === "sideStory" &&
+				!hidden.has(Number(subNode.anilistId))
+			)
+				out.push(subNode);
+		}
+	}
+	return out;
+}
+
 export async function storedAnimeState(userId, tmdbId) {
 	const { rows } = await pool.query(
 		`SELECT seasons FROM shows

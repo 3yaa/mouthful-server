@@ -1,3 +1,4 @@
+import { httpFetch } from "../utils/httpFetch.js";
 // import dotenv from "dotenv";
 // import { checkDuplicate } from "../utils/checkDuplicate.js";
 
@@ -18,7 +19,7 @@
 // 			headers: headers,
 // 		};
 // 		// make call
-// 		const response = await fetch(url, options);
+// 		const response = await httpFetch(url, options);
 // 		if (!response.ok) {
 // 			return res.status(response.status).json({
 // 				success: false,

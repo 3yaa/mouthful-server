@@ -221,12 +221,18 @@ async function buildAnimeChain(
 		enrichedNodes,
 		dropped,
 	);
-
 	// films are not a slot
 	const spineFilms = liftFilms(fullFranchise, byAnilist);
 	hangFilms(spineFilms, fullFranchise, enrichedNodes);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
+	//
+	if (dropped.length) {
+		const rootSlot =
+			fullFranchise.find((slot) => slot.anilistId === rootId) ??
+			fullFranchise[0];
+		if (rootSlot) rootSlot.droppedNodes = dropped;
+	}
 
 	return {
 		root: shapeAnime(rootAnime, true),
@@ -249,13 +255,9 @@ export async function applyAnimeChain(
 		const { root, fullFranchise, dropped } = chain;
 
 		// anime specific attributes
-		processedShow.isAnime = true;
 		processedShow.anilistId = root.anilistId;
-		processedShow.titleRomaji = root.titleRomaji;
 		processedShow.seasons = fullFranchise;
 		if (root?.studio) processedShow.creator = root.studio;
-		//
-		if (dropped?.length) processedShow.droppedNodes = dropped;
 		// sends both tmdb and anilist posters
 		const cover = root?.posterUrl ?? fullFranchise[0]?.posterUrl;
 		const posters = processedShow.posters ?? [];

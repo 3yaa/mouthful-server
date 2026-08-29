@@ -24,6 +24,8 @@ export const convertShowToCamelCase = (show) => ({
 	tmdbId: show.tmdb_id,
 	imdbId: show.imdb_id,
 	anilistId: show.anilist_id,
+	franchisePoster: show.franchise_poster,
+	hiddenSides: show.hidden_sides,
 	userId: show.user_id,
 });
 
@@ -173,6 +175,8 @@ const COLUMNS = {
 	tmdbId: "tmdb_id",
 	imdbId: "imdb_id",
 	anilistId: "anilist_id",
+	franchisePoster: "franchise_poster",
+	hiddenSides: "hidden_sides",
 };
 
 export const patchShow = async (req, res) => {
@@ -293,6 +297,8 @@ export const createShow = async (req, res) => {
 			tmdbId,
 			imdbId,
 			anilistId,
+			franchisePoster,
+			hiddenSides,
 		} = req.body;
 
 		// anime -> first slot's AniList id | live-action -> index 0
@@ -319,9 +325,11 @@ export const createShow = async (req, res) => {
       tmdb_id,
       imdb_id,
       anilist_id,
+      franchise_poster,
+      hidden_sides,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
     ) RETURNING *
   `;
 		const values = [
@@ -342,6 +350,10 @@ export const createShow = async (req, res) => {
 			tmdbId,
 			imdbId ?? null,
 			anilistId ?? null,
+			typeof franchisePoster === "boolean" ? franchisePoster : null,
+			Array.isArray(hiddenSides) && hiddenSides.length
+				? hiddenSides
+				: null,
 			userId,
 		];
 		const result = await pool.query(query, values);

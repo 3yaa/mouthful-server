@@ -3,6 +3,7 @@ import { checkDuplicate } from "../utils/checkDuplicate.js";
 import { getLogoUrls } from "../utils/tmdbLogo.js";
 import { getBackdropUrls, getPosterUrls } from "../utils/tmdbArtwork.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
+import { httpFetch } from "../utils/httpFetch.js";
 
 dotenv.config();
 
@@ -13,7 +14,7 @@ async function tmdbFetch(path, params = {}) {
 		api_key: process.env.TMDB_API_KEY,
 		...params,
 	});
-	const response = await fetch(`${TMDB_BASE}${path}?${query}`);
+	const response = await httpFetch(`${TMDB_BASE}${path}?${query}`);
 	if (!response.ok) {
 		const error = new Error(`TMDB API error: ${response.statusText}`);
 		error.status = response.status;

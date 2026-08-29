@@ -1,10 +1,11 @@
+import { httpFetch } from "../utils/httpFetch.js";
 // export async function useWikidataAPI(req, res) {
 //   try {
 //     const openLibraryID = req.query.openLibraryID;
 //     const query = `
 //     SELECT ?workLabel ?seriesLabel ?ordinal ?followsLabel ?followedByLabel WHERE {
 //       ?work wdt:P648 "${openLibraryID}"
-      
+
 //       OPTIONAL {
 //         ?work p:P179 ?seriesStatement.
 //         ?seriesStatement ps:P179 ?series.
@@ -12,13 +13,13 @@
 //         OPTIONAL { ?seriesStatement pq:P155 ?follows. }
 //         OPTIONAL { ?seriesStatement pq:P156 ?followedBy. }
 //       }
-      
+
 //       SERVICE wikibase:label { bd:serviceParam wikibase:language "en, mul". }
 //     }`;
 //     const endpoint = "https://query.wikidata.org/sparql";
 //     const url = `${endpoint}?query=${encodeURIComponent(query)}&format=json`;
 //     // make call
-//     const response = await fetch(url, {
+//     const response = await httpFetch(url, {
 //       headers: {
 //         "User-Agent": `mouthful-server/1.0 ${process.env.PAGE_CONTACT}`,
 //         Accept: "application/sparql-results+json",
@@ -61,7 +62,7 @@
 // /* with qid
 // SELECT ?work ?workLabel ?series ?seriesLabel ?ordinal ?follows ?followsLabel ?followedBy ?followedByLabel WHERE {
 //   ?work wdt:P648 "OL19880443W".   # Open Library ID
-  
+
 //   OPTIONAL {
 //     ?work p:P179 ?seriesStatement.     # "part of the series"
 //     ?seriesStatement ps:P179 ?series.
@@ -69,7 +70,7 @@
 //     OPTIONAL { ?seriesStatement pq:P155 ?follows. }    # follows (qualifier)
 //     OPTIONAL { ?seriesStatement pq:P156 ?followedBy. } # followed by (qualifier)
 //   }
-  
+
 //   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 // }
 // */

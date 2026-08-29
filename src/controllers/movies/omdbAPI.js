@@ -1,3 +1,4 @@
+import { httpFetch } from "../utils/httpFetch.js";
 // import dotenv from "dotenv";
 // import { checkDuplicate } from "../utils/checkDuplicate.js";
 // import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
@@ -12,7 +13,7 @@
 //       process.env.OMDB_API_KEY
 //     }&t=${encodeURIComponent(title)}&y=${year}`;
 //     // make call
-//     const response = await fetch(url);
+//     const response = await httpFetch(url);
 //     if (!response.ok) {
 //       return res.status(response.status).json({
 //         success: false,

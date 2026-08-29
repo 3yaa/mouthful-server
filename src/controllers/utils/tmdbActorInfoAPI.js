@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { pool } from "../../config/db.js";
+import { httpFetch } from "./httpFetch.js";
 
 dotenv.config();
 
@@ -8,7 +9,7 @@ const PROFILE_BASE = "https://image.tmdb.org/t/p/w342";
 export async function useTmdbShowCastAPI(req, res) {
 	try {
 		const { tmdbId } = req.query;
-		const tmdbRes = await fetch(
+		const tmdbRes = await httpFetch(
 			`https://api.themoviedb.org/3/tv/${tmdbId}/credits?api_key=${process.env.TMDB_API_KEY}`,
 		);
 		if (!tmdbRes.ok) throw new Error(`TMDB HTTP ${tmdbRes.status}`);
@@ -38,7 +39,7 @@ export async function useTmdbMovieCastAPI(req, res) {
 
 		// LEGACY -- SOME MOVIES DON'T HAVE tmdbId
 		if (tmdbId === "-1") {
-			const findRes = await fetch(
+			const findRes = await httpFetch(
 				`https://api.themoviedb.org/3/find/${imdbId}?api_key=${process.env.TMDB_API_KEY}&external_source=imdb_id`,
 			);
 			if (!findRes.ok)
@@ -56,7 +57,7 @@ export async function useTmdbMovieCastAPI(req, res) {
 			);
 		}
 
-		const tmdbRes = await fetch(
+		const tmdbRes = await httpFetch(
 			`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${process.env.TMDB_API_KEY}`,
 		);
 		if (!tmdbRes.ok) throw new Error(`TMDB HTTP ${tmdbRes.status}`);
@@ -94,7 +95,7 @@ export async function useTmdbMovieCastAPI(req, res) {
 export async function useTmdbActorWorksAPI(req, res) {
 	try {
 		const { actorId, role } = req.query;
-		const tmdbRes = await fetch(
+		const tmdbRes = await httpFetch(
 			`https://api.themoviedb.org/3/person/${actorId}/combined_credits?api_key=${process.env.TMDB_API_KEY}`,
 		);
 		if (!tmdbRes.ok) throw new Error(`TMDB HTTP ${tmdbRes.status}`);

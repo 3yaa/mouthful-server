@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, writeFileSync, statSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { httpFetch } from "../../../utils/httpFetch.js";
 
-//
 const SOURCE =
 	"https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json";
 const DISK_CACHE = join(tmpdir(), "mouthful_fribb_anime_list.json");
 const TTL = 24 * 60 * 60 * 1000;
+const DOWNLOAD_TIMEOUT_MS = 60_000;
 
 let memCache = null;
 let loadingPromise = null;
@@ -18,7 +19,7 @@ const diskAgeMs = () =>
 		: Infinity;
 
 async function download() {
-	const res = await fetch(SOURCE);
+	const res = await httpFetch(SOURCE, {}, DOWNLOAD_TIMEOUT_MS);
 	if (!res.ok) throw new Error(`Fribb list HTTP ${res.status}`);
 	const text = await res.text();
 	writeFileSync(DISK_CACHE, text);

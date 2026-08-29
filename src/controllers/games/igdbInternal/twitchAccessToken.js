@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { httpFetch } from "../../utils/httpFetch.js";
 
 dotenv.config();
 
@@ -8,7 +9,7 @@ let twitchTokenExpiry = null;
 // get access token
 async function getTwitchAccessToken() {
   try {
-    const response = await fetch("https://id.twitch.tv/oauth2/token", {
+    const response = await httpFetch("https://id.twitch.tv/oauth2/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

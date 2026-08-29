@@ -1,3 +1,4 @@
+import { httpFetch } from "../utils/httpFetch.js";
 // import dotenv from "dotenv";
 
 // dotenv.config();
@@ -9,7 +10,7 @@
 //       query
 //     )}&maxResults=${limit}&key=${process.env.GOOGLE_BOOKS_API_KEY}`;
 //     // make call
-//     const response = await fetch(url);
+//     const response = await httpFetch(url);
 //     if (!response.ok) {
 //       return res.status(response.status).json({
 //         success: false,

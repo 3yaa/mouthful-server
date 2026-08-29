@@ -1,3 +1,4 @@
+import { httpFetch } from "../../../utils/httpFetch.js";
 const ENDPOINT = "https://shikimori.io/api";
 
 // 5 req per sec | 90 per min
@@ -49,7 +50,7 @@ async function takeSlot() {
 async function send(path, attempt = 0) {
 	await takeSlot();
 
-	const res = await fetch(`${ENDPOINT}${path}`, {
+	const res = await httpFetch(`${ENDPOINT}${path}`, {
 		headers: {
 			Accept: "application/json",
 			"User-Agent": `mouthful-server/1.0 (+${process.env.PAGE_CONTACT})`,

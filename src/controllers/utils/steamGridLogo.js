@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { httpFetch } from "./httpFetch.js";
 
 dotenv.config();
 
@@ -11,7 +12,7 @@ const MAX_LOGOS = 12;
 async function sgdbFetch(path) {
 	const key = process.env.STEAMGRIDDB_API_KEY;
 	if (!key) return null;
-	const response = await fetch(`${SGDB_BASE}${path}`, {
+	const response = await httpFetch(`${SGDB_BASE}${path}`, {
 		headers: { Authorization: `Bearer ${key}` },
 	});
 	if (!response.ok) return null;

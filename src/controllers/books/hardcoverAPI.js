@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { checkDuplicate } from "../utils/checkDuplicate.js";
+import { httpFetch } from "../utils/httpFetch.js";
 
 dotenv.config();
 
@@ -8,7 +9,7 @@ const MIN_COVER_HEIGHT = 270;
 
 // gql query
 async function gql(query, variables = {}) {
-	const res = await fetch("https://api.hardcover.app/v1/graphql", {
+	const res = await httpFetch("https://api.hardcover.app/v1/graphql", {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -69,15 +70,10 @@ async function searchBooks(title, { perPage = 10 } = {}) {
 		{ q: title, perPage },
 	);
 	const hits = data?.search?.results?.hits ?? [];
-	return (
-		hits
-			.map((hit) => cleanBookData(hit.document))
-			.filter(
-				(book) =>
-					book.title && (book.authors.length > 0 || book.pages),
-			)
-			.sort((a, z) => z._score - a._score)
-	);
+	return hits
+		.map((hit) => cleanBookData(hit.document))
+		.filter((book) => book.title && (book.authors.length > 0 || book.pages))
+		.sort((a, z) => z._score - a._score);
 }
 
 // 2nd call -- series

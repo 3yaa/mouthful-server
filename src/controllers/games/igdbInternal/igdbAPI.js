@@ -1,12 +1,13 @@
 import dotenv from "dotenv";
 import { resetToken, getAccessToken } from "./twitchAccessToken.js";
+import { httpFetch } from "../../utils/httpFetch.js";
 
 dotenv.config();
 
 async function makeIgdbRequest(query, accessToken) {
   const url = "https://api.igdb.com/v4/games";
 
-  return await fetch(url, {
+  return await httpFetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,

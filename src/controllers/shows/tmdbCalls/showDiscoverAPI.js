@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { getImdbRatings } from "../../imdbRating/imdbRatingCache.js";
+import { httpFetch } from "../../utils/httpFetch.js";
 
 dotenv.config();
 
@@ -32,7 +33,7 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 		const baseUrl = isFuture
 			? buildEndedUrl(countryOrigin)
 			: buildMonthUrl(year, month, countryOrigin);
-		const discoverRes = await fetch(`${baseUrl}&page=${page}`);
+		const discoverRes = await httpFetch(`${baseUrl}&page=${page}`);
 		if (!discoverRes.ok) throw new Error(`HTTP ${discoverRes.status}`);
 		const data = await discoverRes.json();
 		const rawShows = data.results || [];
@@ -41,7 +42,7 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 		// ACTUALLY GET ALL THE DATAFIELDS
 		const details = await Promise.all(
 			rawShows.map((s) =>
-				fetch(
+				httpFetch(
 					`https://api.themoviedb.org/3/tv/${s.id}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids`,
 				)
 					.then((r) => r.json())

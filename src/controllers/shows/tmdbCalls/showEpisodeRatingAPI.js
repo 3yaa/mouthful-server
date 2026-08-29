@@ -2,13 +2,14 @@ import { getShowEpisodes } from "../../imdbRating/imdbEpRatingCache.js";
 import { getImdbRatings } from "../../imdbRating/imdbRatingCache.js";
 import { pool } from "../../../config/db.js";
 import dotenv from "dotenv";
+import { httpFetch } from "../../utils/httpFetch.js";
 
 dotenv.config();
 
 async function resolveImdbId(imdbId, tmdbId, showId, userId) {
 	if (imdbId) return imdbId;
 
-	const res = await fetch(
+	const res = await httpFetch(
 		`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=external_ids`,
 	);
 	if (!res.ok) throw new Error(`TMDB external_ids HTTP ${res.status}`);

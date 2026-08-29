@@ -3,6 +3,7 @@ import { getLogoUrls } from "../../utils/tmdbLogo.js";
 import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
 import { isAnime, runAnime } from "../anime/utils/isAnimeCheck.js";
 import { pickAnimeResult } from "../anime/utils/utilFunctions.js";
+import { httpFetch } from "../../utils/httpFetch.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
@@ -26,7 +27,7 @@ async function tmdbFetch(path, params = {}) {
 		api_key: process.env.TMDB_API_KEY,
 		...params,
 	});
-	const response = await fetch(`${TMDB_BASE}${path}?${query}`);
+	const response = await httpFetch(`${TMDB_BASE}${path}?${query}`);
 	if (!response.ok) {
 		throw apiError(
 			response.status,

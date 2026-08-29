@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, statSync } from "fs";
 import { createGunzip } from "zlib";
 import { Readable } from "stream";
 import { join } from "path";
+import { httpFetch } from "../utils/httpFetch.js";
 
 export const TTL = 24 * 60 * 60 * 1000;
 
@@ -15,7 +16,7 @@ export async function fetchBuffer(url, file, force = false) {
 		return readFileSync(DISK_CACHE);
 	}
 	// write to disk
-	const res = await fetch(url);
+	const res = await httpFetch(url);
 	const buffer = Buffer.from(await res.arrayBuffer());
 	writeFileSync(DISK_CACHE, buffer);
 	return buffer;

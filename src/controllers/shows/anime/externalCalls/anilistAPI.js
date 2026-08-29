@@ -1,3 +1,4 @@
+import { httpFetch } from "../../../utils/httpFetch.js";
 const ANILIST_QUERY = `
   query FranchiseNodes($ids: [Int]) {
     Page(perPage: 50) {
@@ -71,7 +72,7 @@ async function anilistCall(ids, attempt = 0) {
 	});
 
 	//
-	const response = await fetch(ENDPOINT, {
+	const response = await httpFetch(ENDPOINT, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",

@@ -16,7 +16,7 @@ export const validateShowId = (req, res, next) => {
 };
 
 export const validateShowData = (req, res, next) => {
-  const { score, note, dateCompleted } = req.body;
+  const { score, note, dateCompleted, hiddenSides } = req.body;
   // for score
   if (score !== undefined) {
     if (score !== null) {
@@ -54,9 +54,30 @@ export const validateShowData = (req, res, next) => {
       });
     }
   }
+  // for hiddenSides
+  if (hiddenSides !== undefined && hiddenSides !== null) {
+    if (!Array.isArray(hiddenSides)) {
+      return res.status(400).json({
+        success: false,
+        message: "hiddenSides must be an array of anilist ids or null",
+      });
+    }
+    // objects go to NaN rather than through Number
+    const ids = hiddenSides.map((raw) =>
+      typeof raw === "object" ? NaN : Number(raw),
+    );
+    if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "hiddenSides must hold positive integers",
+      });
+    }
+    const unique = [...new Set(ids)];
+    req.body.hiddenSides = unique.length ? unique : null;
+  }
   // for dateCompleted
   if (dateCompleted !== undefined) {
-    // Allow null to clear the date
+    // allow null to clear the date
     if (dateCompleted !== null) {
       const date = new Date(dateCompleted);
       if (isNaN(date.getTime())) {
@@ -66,7 +87,7 @@ export const validateShowData = (req, res, next) => {
             "Invalid dateCompleted field provided (must be valid date or null)",
         });
       }
-      // Ensure it's not a future date
+      // ensure it's not a future date
       if (date > new Date()) {
         return res.status(400).json({
           success: false,
@@ -91,6 +112,8 @@ export const validateShowPatch = (req, res, next) => {
     "dateCompleted",
     "curSeasonIndex",
     "curEpisode",
+    "franchisePoster",
+    "hiddenSides",
   ];
   // for status
   if (updates.status && !VALID_STATUSES.includes(updates.status)) {
@@ -146,6 +169,8 @@ export const validateShowRefresh = (req, res, next) => {
     "curSeasonIndex",
     "curEpisode",
     "anilistId",
+    "dateReleased",
+    "franchisePoster",
   ];
   // check if exists
   if (!updates || Object.keys(updates).length === 0) {

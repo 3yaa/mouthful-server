@@ -1,3 +1,4 @@
+import { httpFetch } from "../utils/httpFetch.js";
 // // import dotenv from "dotenv";
 // import { checkDuplicate } from "../utils/checkDuplicate.js";
 
@@ -17,7 +18,7 @@
 // async function getOpenLibraryMatch(title, author) {
 // 	try {
 // 		const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&fields=key,title,first_publish_year&limit=1`;
-// 		const res = await fetch(url, {
+// 		const res = await httpFetch(url, {
 // 			headers: {
 // 				"User-Agent": `Media Manager/0.3 (${process.env.PAGE_CONTACT})`,
 // 			},
@@ -42,7 +43,7 @@
 // 		const { query, limit } = req.query;
 // 		const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=ebook&limit=${limit}`;
 // 		// call
-// 		const response = await fetch(url, { method: "GET" });
+// 		const response = await httpFetch(url, { method: "GET" });
 // 		if (!response.ok) {
 // 			return res.status(response.status).json({
 // 				success: false,
@@ -66,7 +67,7 @@
 // 		let backdrop_urls = [];
 // 		try {
 // 			const audiobookUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=audiobook&limit=${limit}`;
-// 			const audiobookResponse = await fetch(audiobookUrl, {
+// 			const audiobookResponse = await httpFetch(audiobookUrl, {
 // 				method: "GET",
 // 			});
 // 			if (audiobookResponse.ok) {

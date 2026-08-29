@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: false // connection will be local so no need to encryption
+	connectionString: process.env.DATABASE_URL,
+	ssl: false,
+	connectionTimeoutMillis: 5_000,
+	statement_timeout: 30_000,
+	idle_in_transaction_session_timeout: 10_000,
 });
