@@ -1,6 +1,7 @@
 import { pool } from "../../../../config/db.js";
 import { runAnime } from "./isAnimeCheck.js";
 import { applyAnimeChain } from "../animeAPI.js";
+import { findByTmdb } from "../externalCalls/fribbMap.js";
 
 export function pickRoot(rows) {
 	// make sure mal id exists
@@ -11,6 +12,14 @@ export function pickRoot(rows) {
 		usable[0] ??
 		null
 	);
+}
+
+// walk tmdb series for the original
+export async function pickAnimeResult(results) {
+	for (const result of results ?? []) {
+		if (pickRoot(await findByTmdb(result.id, "tv"))) return result;
+	}
+	return null;
 }
 
 export function compareStartDate(a, b) {
