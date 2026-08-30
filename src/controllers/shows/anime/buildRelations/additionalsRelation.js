@@ -1,11 +1,46 @@
-import { isRecapOf } from "./classifyNodes.js";
+import {
+	animeEdges,
+	findDateParent,
+	isFeature,
+	isRecapOf,
+} from "./classifyNodes.js";
+import { dropShaped } from "../utils/shapeAnimes.js";
 
+const rankMap = (types) => new Map(types.map((type, rank) => [type, rank]));
+
+// flip the parent's label so the whole index reads from the additional's side
+const INVERSE_RELATION = new Map([
+	["PREQUEL", "SEQUEL"],
+	["SEQUEL", "PREQUEL"],
+	["PARENT", "SIDE_STORY"],
+	["SIDE_STORY", "PARENT"],
+	["COMPILATION", "CONTAINS"],
+	["CONTAINS", "COMPILATION"],
+]);
+const inverseOf = (relationType) =>
+	INVERSE_RELATION.get(relationType) ?? relationType;
+
+// a shorter cut of whatever it points at
 const RECUT_RELATIONS = new Set(["SUMMARY", "ALTERNATIVE"]);
-const NOISE_RELATIONS = new Set(["SUMMARY", "CHARACTER", "OTHER"]);
+
+// never places an entry -- only the reason one with no other relation leaves
 const NOISE_REASON = new Map([
-	["SUMMARY", "recap"],
 	["CHARACTER", "character short"],
 	["OTHER", "unrelated"],
+]);
+const NOISE_RELATIONS = new Set(NOISE_REASON.keys());
+const NOISE_RANK = rankMap([...NOISE_REASON.keys()]);
+
+// what the parent is to the additional, best host first -- unlisted sorts last
+const ANCHOR_RANK = rankMap([
+	"PARENT",
+	"PREQUEL",
+	"ALTERNATIVE",
+	"SUMMARY",
+	"SEQUEL",
+	"SIDE_STORY",
+	"CONTAINS",
+	"COMPILATION",
 ]);
 
 export function buildRelationIndex(mainlineIds, additionalIds, enrichedNodes) {
@@ -21,17 +56,15 @@ export function buildRelationIndex(mainlineIds, additionalIds, enrichedNodes) {
 
 	// read both directions
 	for (const parentId of mainlineIds) {
-		const parent = enrichedNodes.get(parentId);
-		for (const edge of parent?.relations?.edges ?? []) {
-			if (additionalIds.has(edge.node?.id)) {
-				add(edge.node.id, edge.relationType, parentId);
+		for (const edge of animeEdges(enrichedNodes.get(parentId))) {
+			if (additionalIds.has(edge.node.id)) {
+				add(edge.node.id, inverseOf(edge.relationType), parentId);
 			}
 		}
 	}
 	for (const additionalId of additionalIds) {
-		const additional = enrichedNodes.get(additionalId);
-		for (const edge of additional?.relations?.edges ?? []) {
-			if (mainlineIds.has(edge.node?.id)) {
+		for (const edge of animeEdges(enrichedNodes.get(additionalId))) {
+			if (mainlineIds.has(edge.node.id)) {
 				add(additionalId, edge.relationType, edge.node.id);
 			}
 		}
@@ -40,31 +73,34 @@ export function buildRelationIndex(mainlineIds, additionalIds, enrichedNodes) {
 	return index;
 }
 
-// when an entry's two relations disagree, the trash one win to get dropped :()
-function pickRelation(relations = []) {
-	return (
-		relations.find((relation) => relation.relationType === "SUMMARY") ??
-		relations.find((relation) =>
-			NOISE_RELATIONS.has(relation.relationType),
-		) ??
-		relations.find((relation) => relation.relationType === "ALTERNATIVE") ??
-		relations.find(
-			(relation) => !NOISE_RELATIONS.has(relation.relationType),
-		) ??
-		relations[0] ??
-		null
-	);
-}
+// lowest rank wins, first seen breaks a tie
+function pickByRank(relations, ranks, unranked) {
+	let picked = null;
+	let best = Infinity;
 
-function findDateParent(anime, mainlineNodes) {
-	let parent = null;
-
-	for (const candidate of mainlineNodes) {
-		if (!anime.startDate || !candidate.startDate) continue;
-		if (candidate.startDate <= anime.startDate) parent = candidate;
+	for (const relation of relations) {
+		const rank = ranks.get(relation.relationType) ?? unranked;
+		if (rank < best) {
+			best = rank;
+			picked = relation;
+		}
 	}
 
-	return parent ?? mainlineNodes[0] ?? null;
+	return picked;
+}
+
+// SUMMARY is a recap outright -- ALTERNATIVE only when the cut is a feature
+function findRecut(additional, relations, enrichedNodes) {
+	const node = enrichedNodes?.get(additional.anilistId);
+
+	return (
+		relations.find((relation) => {
+			if (!RECUT_RELATIONS.has(relation.relationType)) return false;
+			if (relation.relationType === "ALTERNATIVE" && !isFeature(node))
+				return false;
+			return isRecapOf(node, enrichedNodes?.get(relation.parentId));
+		}) ?? null
+	);
 }
 
 export function relateAdditional(
@@ -76,50 +112,51 @@ export function relateAdditional(
 	dropped = [],
 ) {
 	for (const additional of additionalAnime) {
-		const relation = pickRelation(relationIndex.get(additional.anilistId));
-		const relationType = relation?.relationType ?? null;
-		// declared summary is not a spine part
-		if (
-			NOISE_RELATIONS.has(relationType) &&
-			!(relationType === "SUMMARY" && additional.kind === "film")
-		) {
-			dropped.push({
-				...additional,
-				relationType,
-				reason: NOISE_REASON.get(relationType) ?? "unrelated",
-			});
+		const relations = relationIndex.get(additional.anilistId) ?? [];
+
+		const recut = findRecut(additional, relations, enrichedNodes);
+		if (recut) {
+			const host = mainlineById.get(recut.parentId);
+			dropped.push(
+				dropShaped(additional, "recut", {
+					relationType: recut.relationType,
+					recutOf: host?.anilistId ?? recut.parentId,
+				}),
+			);
 			continue;
 		}
 
+		const anchor = pickByRank(
+			relations.filter(
+				(relation) => !NOISE_RELATIONS.has(relation.relationType),
+			),
+			ANCHOR_RANK,
+			ANCHOR_RANK.size,
+		);
+		// nothing but noise
+		if (!anchor && relations.length) {
+			const noise = pickByRank(relations, NOISE_RANK, Infinity);
+			dropped.push(
+				dropShaped(
+					additional,
+					NOISE_REASON.get(noise.relationType) ?? "unrelated",
+					{ relationType: noise.relationType },
+				),
+			);
+			continue;
+		}
+
+		const relationType = anchor?.relationType ?? null;
 		// pick what the parent node is
 		const parent =
-			mainlineById.get(relation?.parentId) ??
-			findDateParent(additional, mainlineNodes);
+			mainlineById.get(anchor?.parentId) ??
+			findDateParent(mainlineNodes, additional);
 		// no slot to hang from
 		if (!parent) {
-			dropped.push({ ...additional, relationType, reason: "no parent" });
+			dropped.push(dropShaped(additional, "no parent", { relationType }));
 			continue;
 		}
 
-		// for cases like jjk execuation -- recap + early screening
-		if (
-			additional.kind === "film" &&
-			RECUT_RELATIONS.has(relationType) &&
-			isRecapOf(
-				enrichedNodes?.get(additional.anilistId),
-				enrichedNodes?.get(relation.parentId),
-			)
-		) {
-			dropped.push({
-				...additional,
-				relationType,
-				reason: "recut",
-				recutOf: parent.anilistId,
-			});
-			continue;
-		}
-
-		// only a spine node can be an alt cut
 		parent.subNodes.push({ ...additional, relationType });
 	}
 }

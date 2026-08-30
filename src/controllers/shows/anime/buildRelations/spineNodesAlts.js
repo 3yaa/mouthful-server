@@ -1,4 +1,5 @@
-import { isSameProduction } from "./classifyNodes.js";
+import { animeEdges, sameProduction } from "./classifyNodes.js";
+import { dropShaped } from "../utils/shapeAnimes.js";
 
 const LEAD_FORMAT_PRIORITY = new Map([
 	["TV", 0],
@@ -16,13 +17,14 @@ function relateAltCuts(mainlineIds, enrichedNodes) {
 	//
 	for (const id of mainlineIds) {
 		const anime = enrichedNodes.get(id);
-		for (const edge of anime?.relations?.edges ?? []) {
+		for (const edge of animeEdges(anime)) {
 			if (edge.relationType !== "ALTERNATIVE") continue;
-			const otherId = edge.node?.id;
+			const otherId = edge.node.id;
 			// only looking at spine items
 			if (!mainlineIds.has(otherId)) continue;
 			// ALTERNATIVE also links a remake to its original
-			if (!isSameProduction(anime, enrichedNodes.get(otherId))) continue;
+			if (sameProduction(anime, enrichedNodes.get(otherId)) !== true)
+				continue;
 			// do both if if one side is missing its fills
 			alts.get(id).add(otherId);
 			alts.get(otherId).add(id);
@@ -127,7 +129,7 @@ export function collapseAltCuts(
 		const lead = shapedById.get(leadId);
 		//
 		if (!lead) {
-			dropped.push({ ...anime, reason: "lost cut" });
+			dropped.push(dropShaped(anime, "lost cut"));
 			continue;
 		}
 		// lead id and variant ids resolve to lead obj

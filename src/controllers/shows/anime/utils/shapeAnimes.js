@@ -116,6 +116,12 @@ export function shapeDropped(anime, anilistId, reason, extra = {}) {
 	};
 }
 
+// shapeDropped for an already shaped entry -- its subtree does not follow
+export function dropShaped(shaped, reason, extra = {}) {
+	const { subNodes, variants, ...rest } = shaped;
+	return { ...rest, isMainLine: false, ...extra, reason };
+}
+
 // Shikimori's own row, for a franchise entry the Fribb list has no AniList id
 // for. This is everything knowable about one -- no relations, no runtime, so
 // nothing that could place it on a spine -- which is why they can only ever be

@@ -1,3 +1,5 @@
+import { animeEdges } from "./classifyNodes.js";
+
 // SPIN_OFF, CHARACTER, OTHER and ADAPTATION not counted
 const CONFIRM_RELATIONS = new Set([
 	"PREQUEL",
@@ -12,8 +14,6 @@ const CONFIRM_RELATIONS = new Set([
 
 const SPINE_RELATIONS = new Set(["PREQUEL", "SEQUEL"]);
 
-const edgesOf = (node) => node?.relations?.edges ?? [];
-
 // spine as anilist draws it
 export function walkSpine(candidates, enrichedNodes, rootId) {
 	const linked = new Map();
@@ -24,13 +24,13 @@ export function walkSpine(candidates, enrichedNodes, rootId) {
 	};
 	//
 	for (const anilistId of candidates) {
-		for (const edge of edgesOf(enrichedNodes.get(anilistId))) {
-			const other = edge.node;
+		for (const edge of animeEdges(enrichedNodes.get(anilistId))) {
+			const otherId = edge.node.id;
 			if (!SPINE_RELATIONS.has(edge.relationType)) continue;
-			if (other?.type !== "ANIME" || !candidates.has(other.id)) continue;
+			if (!candidates.has(otherId)) continue;
 			//
-			link(anilistId, other.id);
-			link(other.id, anilistId);
+			link(anilistId, otherId);
+			link(otherId, anilistId);
 		}
 	}
 
@@ -56,9 +56,9 @@ export function reviewCandidates(candidates, enrichedNodes, spine) {
 	// everything the spine vouches for, collected in one pass
 	const vouchedBySpine = new Set();
 	for (const spineId of spine) {
-		for (const edge of edgesOf(enrichedNodes.get(spineId))) {
-			if (!CONFIRM_RELATIONS.has(edge.relationType)) continue;
-			if (edge.node?.id != null) vouchedBySpine.add(edge.node.id);
+		for (const edge of animeEdges(enrichedNodes.get(spineId))) {
+			if (CONFIRM_RELATIONS.has(edge.relationType))
+				vouchedBySpine.add(edge.node.id);
 		}
 	}
 
@@ -70,9 +70,9 @@ export function reviewCandidates(candidates, enrichedNodes, spine) {
 			continue;
 		}
 		// spine wins
-		const fromNode = edgesOf(node).some(
+		const fromNode = animeEdges(node).some(
 			(edge) =>
-				spine.has(edge.node?.id) &&
+				spine.has(edge.node.id) &&
 				CONFIRM_RELATIONS.has(edge.relationType),
 		);
 

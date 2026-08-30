@@ -9,6 +9,7 @@ import {
 } from "./buildRelations/reviewRelations.js";
 import { collapseAltCuts } from "./buildRelations/spineNodesAlts.js";
 import {
+	animeEdges,
 	canHoldSpine,
 	continuesChain,
 	filmTmdbId,
@@ -139,10 +140,11 @@ async function buildAnimeChain(
 	}
 	// a subnode can sometimes carry prequel/sequel (jjk execution bridges s2 and s3)
 	const summaryTargets = new Set();
-	for (const anime of enrichedNodes.values()) {
-		for (const edge of anime?.relations?.edges ?? []) {
+	for (const anilistId of confirmed) {
+		const anime = enrichedNodes.get(anilistId);
+		for (const edge of animeEdges(anime)) {
 			if (edge.relationType !== "SUMMARY") continue;
-			const targetId = edge.node?.id;
+			const targetId = edge.node.id;
 			if (!confirmed.has(targetId)) continue;
 			//
 			if (!isRecapOf(enrichedNodes.get(targetId), anime)) continue;
@@ -153,8 +155,6 @@ async function buildAnimeChain(
 	// classify nodes
 	const spineIds = new Set();
 	const additionalIds = new Set();
-	// turned away from the spine
-	const interludeIds = new Set();
 	for (const anilistId of confirmed) {
 		const anime = enrichedNodes.get(anilistId);
 		const interlude = isInterlude(anime, filmTmdbId(anime, byAnilist));
@@ -168,10 +168,7 @@ async function buildAnimeChain(
 			!summaryTargets.has(anilistId) &&
 			(anilistId === rootId || holdsSlot);
 		if (onSpine) spineIds.add(anilistId);
-		else {
-			additionalIds.add(anilistId);
-			if (interlude) interludeIds.add(anilistId);
-		}
+		else additionalIds.add(anilistId);
 	}
 
 	// PHASE 5: build anime shape
@@ -213,7 +210,7 @@ async function buildAnimeChain(
 	fullFranchise.sort(compareStartDate);
 	// relate additional onto parent
 	const relationIndex = buildRelationIndex(
-		new Set([...spineIds, ...interludeIds]),
+		spineIds,
 		additionalIds,
 		enrichedNodes,
 	);
@@ -226,7 +223,7 @@ async function buildAnimeChain(
 		dropped,
 	);
 	// films are not a slot
-	const spineFilms = liftFilms(fullFranchise, byAnilist);
+	const spineFilms = liftFilms(fullFranchise, byAnilist, enrichedNodes);
 	hangFilms(spineFilms, fullFranchise, enrichedNodes);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
