@@ -40,10 +40,13 @@ export function buildRelationIndex(mainlineIds, additionalIds, enrichedNodes) {
 	return index;
 }
 
-// if has trash relation type then disregard any other relation type it might have
+// when an entry's two relations disagree, the trash one win to get dropped :()
 function pickRelation(relations = []) {
 	return (
 		relations.find((relation) => relation.relationType === "SUMMARY") ??
+		relations.find((relation) =>
+			NOISE_RELATIONS.has(relation.relationType),
+		) ??
 		relations.find((relation) => relation.relationType === "ALTERNATIVE") ??
 		relations.find(
 			(relation) => !NOISE_RELATIONS.has(relation.relationType),
