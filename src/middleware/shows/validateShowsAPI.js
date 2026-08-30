@@ -68,3 +68,17 @@ export const validateShowRatingAPI = (req, res, next) => {
 
 	next();
 };
+
+export const validateAnimeStudioAPI = (req, res, next) => {
+	const studio = String(req.query.studio ?? "").trim();
+
+	if (!studio) {
+		return res.status(400).json({
+			success: false,
+			message: "studio parameter is required",
+		});
+	}
+
+	req.query.studio = studio;
+	next();
+};
