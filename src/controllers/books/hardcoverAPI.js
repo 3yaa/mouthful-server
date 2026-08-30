@@ -7,8 +7,43 @@ dotenv.config();
 const MIN_COVER_WIDTH = 160;
 const MIN_COVER_HEIGHT = 270;
 
+// hardcover charges per top-level field
+const BURST = 5;
+const REFILL_PER_SEC = 1;
+const MAX_429_RETRIES = 3;
+//
+let queue = Promise.resolve();
+let tokens = BURST;
+let lastRefill = Date.now();
+//
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function refill() {
+	const now = Date.now();
+	tokens = Math.min(
+		BURST,
+		tokens + ((now - lastRefill) * REFILL_PER_SEC) / 1000,
+	);
+	lastRefill = now;
+}
+
+async function takeToken() {
+	for (;;) {
+		refill();
+		if (tokens >= 1) {
+			tokens -= 1;
+			return;
+		}
+		await sleep(Math.ceil(((1 - tokens) * 1000) / REFILL_PER_SEC) + 50);
+	}
+}
+
 // gql query
-async function gql(query, variables = {}) {
+async function gql(query, variables = {}, attempt = 0) {
+	await new Promise((resolve) => {
+		queue = queue.then(takeToken).then(resolve, resolve);
+	});
+
 	const res = await httpFetch("https://api.hardcover.app/v1/graphql", {
 		method: "POST",
 		headers: {
@@ -18,6 +53,15 @@ async function gql(query, variables = {}) {
 		},
 		body: JSON.stringify({ query, variables }),
 	});
+
+	// queue
+	if (res.status === 429 && attempt < MAX_429_RETRIES) {
+		const retryAfter = Number(res.headers.get("retry-after") ?? 1);
+		tokens = 0;
+		lastRefill = Date.now();
+		await sleep((retryAfter + 1) * 1000);
+		return gql(query, variables, attempt + 1);
+	}
 
 	if (!res.ok) {
 		throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -34,8 +78,7 @@ async function gql(query, variables = {}) {
 
 //
 function cleanBookData(doc) {
-	// contribution entries with no `contribution` role (or "Author") are the real authors
-	// the rest are illustrators / translators / narrators
+	// contribution entries with no `contribution` role (or "Author") are the real authors the rest are illustrators / translators / narrators
 	const authors = (doc.contributions ?? [])
 		.filter(
 			(contributon) =>
@@ -79,7 +122,6 @@ async function searchBooks(title, { perPage = 10 } = {}) {
 // 2nd call -- series
 
 // cached_image is jsonb: { url, width, height, color, color_name, id }
-// It sometimes deserializes as a string depending on how it was stored.
 const coverInfo = (e) => {
 	let img = e.cached_image;
 	if (!img) return null;
@@ -161,41 +203,54 @@ async function withSeries(book) {
 
 // 3rd call -- series details
 
-// canonical_id is Hardcover's duplicate/translation marker — records with one
-// set point at a master record, so filtering for null gives the canonical book.
-// is_partial_book excludes stubs. distinct_on collapses each position to one row.
+const PER_SERIES_LIMIT = 200;
 async function allNeighbours(seriesList) {
 	const targets = seriesList.filter(
 		(s) => s.id != null && s.position != null,
 	);
 	if (!targets.length) return {};
-	//
-	const parts = targets.map(
-		(s, i) => `
-    s${i}: book_series(
-      distinct_on: position
-      order_by: [{ position: asc }, { book: { users_count: desc } }]
-      where: {
-        series_id: { _eq: ${Number(s.id)} }
-        compilation: { _eq: false }
-        book: {
-          canonical_id: { _is_null: true }
-          is_partial_book: { _eq: false }
-        }
-      }
-      limit: 200
-    ) {
-      position
-      book { title }
-    }`,
+	// distinct_on needs its columns to lead order_by, so series_id sorts first -- a spent limit then drops whole series rather than inventing a neighbour
+	const data = await gql(
+		`query BatchNeighbours($ids: [Int!], $limit: Int!) {
+			book_series(
+				distinct_on: [series_id, position]
+				order_by: [
+					{ series_id: asc }
+					{ position: asc }
+					{ book: { users_count: desc } }
+				]
+				where: {
+					series_id: { _in: $ids }
+					compilation: { _eq: false }
+					book: {
+						canonical_id: { _is_null: true }
+						is_partial_book: { _eq: false }
+					}
+				}
+				limit: $limit
+			) {
+				series_id
+				position
+				book { title }
+			}
+		}`,
+		{
+			ids: targets.map((s) => Number(s.id)),
+			limit: targets.length * PER_SERIES_LIMIT,
+		},
 	);
-	const data = await gql(`query BatchNeighbours {${parts.join("\n")}}`);
+	// bucket by series rather than leaning on the response ordering
+	const bySeries = new Map();
+	for (const row of data?.book_series ?? []) {
+		const rows = bySeries.get(row.series_id);
+		if (rows) rows.push(row);
+		else bySeries.set(row.series_id, [row]);
+	}
 	//
 	const out = {};
-	targets.forEach((s, i) => {
-		const rows = data?.[`s${i}`] ?? [];
-		// neighbours by list index, not position ± 1 — positions can be
-		// non-contiguous (novellas land at 1.5, numbering has gaps)
+	for (const s of targets) {
+		const rows = bySeries.get(Number(s.id)) ?? [];
+		// neighbours by list index, not position ± 1 — positions can be non-contiguous (novellas land at 1.5, numbering has gaps)
 		const idx = rows.findIndex((r) => r.position === s.position);
 		out[s.id] = {
 			previous: idx > 0 ? (rows[idx - 1].book?.title ?? null) : null,
@@ -204,7 +259,7 @@ async function allNeighbours(seriesList) {
 					? (rows[idx + 1].book?.title ?? null)
 					: null,
 		};
-	});
+	}
 	return out;
 }
 

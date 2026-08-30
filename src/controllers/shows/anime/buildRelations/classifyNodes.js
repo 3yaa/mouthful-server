@@ -176,11 +176,13 @@ export function hangFilms(films, fullFranchise, enrichedNodes) {
 	const slotsById = new Map(
 		fullFranchise.map((slot) => [slot.anilistId, slot]),
 	);
-	// ova that hung off film hangs off the film's host slot
+	// a film's subnode attach to parent film
 	const hang = (slot, film, placement) => {
 		const { subNodes = [], ...rest } = film;
 		slot.subNodes.push({ ...rest, placement });
-		slot.subNodes.push(...subNodes);
+		slot.subNodes.push(
+			...subNodes.map((sub) => ({ ...sub, underFilm: film.anilistId })),
+		);
 	};
 
 	for (const film of films) {
