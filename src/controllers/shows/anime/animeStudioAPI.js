@@ -1,5 +1,11 @@
 import { fetchStudioWorks } from "./externalCalls/anilistStudioAPI.js";
 import { animeTitle } from "./utils/shapeAnimes.js";
+import { isRecapOf } from "./buildRelations/classifyNodes.js";
+
+const MIN_ROOT = 3;
+
+const TITLE_TAIL = /[!?.]/;
+const trimEdges = (value) => value.replace(/^[\s:\-–—~]+|[\s:\-–—~]+$/g, "");
 
 // season, year
 function startDateOf(date) {
@@ -41,10 +47,6 @@ function cutAfterWords(title, n) {
 	return count === n ? title.length : -1;
 }
 
-const trimEdges = (value) => value.replace(/^[\s:\-–—~]+|[\s:\-–—~]+$/g, "");
-
-const MIN_ROOT = 3;
-
 // drop main title from next item's
 function splitAgainstSiblings(works) {
 	const shaped = works.map((work) => ({ work, words: words(work.title) }));
@@ -56,9 +58,10 @@ function splitAgainstSiblings(works) {
 			if (!opensWith(entry.words, other.words)) continue;
 			if (!root || other.words.length < root.words.length) root = other;
 		}
-		const cut = root
+		let cut = root
 			? cutAfterWords(entry.work.title, root.words.length)
 			: -1;
+		while (cut > 0 && TITLE_TAIL.test(entry.work.title[cut] ?? "")) cut++;
 		const base = cut > 0 ? trimEdges(entry.work.title.slice(0, cut)) : "";
 		const part = cut > 0 ? trimEdges(entry.work.title.slice(cut)) : "";
 		// if two same
@@ -70,10 +73,21 @@ function splitAgainstSiblings(works) {
 	return works;
 }
 
-const MAX_WORKS = 48;
+function digestIdsIn(nodes) {
+	const ids = new Set();
+	for (const anime of nodes ?? []) {
+		for (const edge of anime?.relations?.edges ?? []) {
+			if (edge.relationType !== "SUMMARY") continue;
+			if (!isRecapOf(edge.node, anime)) continue;
+			ids.add(edge.node.id);
+		}
+	}
+	return ids;
+}
 
 // one card per entry
 export function shapeStudioWorks(nodes) {
+	const digests = digestIdsIn(nodes);
 	const shaped = (nodes ?? [])
 		.filter((anime) => anime && !anime.isAdult && animeTitle(anime))
 		.map((anime) => ({
@@ -90,16 +104,20 @@ export function shapeStudioWorks(nodes) {
 			posterColor: anime.coverImage?.color ?? null,
 			popularity: anime.popularity ?? 0,
 			score: anime.averageScore ?? null,
-		}))
-		.sort((a, b) => b.popularity - a.popularity);
+			isRecap: digests.has(anime.id),
+		}));
 
-	return splitAgainstSiblings(shaped).slice(0, MAX_WORKS);
+	return splitAgainstSiblings(shaped);
 }
 
 export async function useAnimeStudioAPI(req, res) {
 	try {
-		const { studio } = req.query;
-		const found = await fetchStudioWorks(studio);
+		const studio = String(req.query.studio ?? "").trim();
+		const asked = parseInt(req.query.page, 10);
+		const page = Number.isInteger(asked) && asked > 0 ? asked : 1;
+		const sort = req.query.sort === "recent" ? "recent" : "popular";
+
+		const found = await fetchStudioWorks(studio, { page, sort });
 		if (!found) {
 			return res.status(404).json({
 				success: false,
@@ -107,12 +125,17 @@ export async function useAnimeStudioAPI(req, res) {
 			});
 		}
 
-		const works = shapeStudioWorks(found.works);
+		//
+		const works = shapeStudioWorks(found.nodes).filter((work) =>
+			found.pageIds.has(work.anilistId),
+		);
 
 		res.status(200).json({
 			success: true,
 			studio: { id: found.id, name: found.name },
 			works,
+			page,
+			hasMore: found.hasNextPage,
 		});
 	} catch (e) {
 		console.error("Failed to fetch studio works from AniList: ", e);

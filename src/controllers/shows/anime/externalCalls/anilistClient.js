@@ -70,7 +70,8 @@ export async function anilistRequest(
 	variables,
 	{ cacheKey, bypassCache = false } = {},
 ) {
-	const key = JSON.stringify({ cacheKey, variables });
+	// rides in the key -- so don't read its own old answer
+	const key = JSON.stringify({ cacheKey, query, variables });
 	//
 	if (!bypassCache) {
 		const hit = cache.get(key);

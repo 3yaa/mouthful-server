@@ -32,7 +32,7 @@ export const validateTMDBIdAPI = (req, res, next) => {
 };
 
 export const validateShowsDiscoverAPI = (req, res, next) => {
-	const { year, month, countryOrigin, page } = req.query;
+	const { year, month, page } = req.query;
 
 	if (!year || !month || !page) {
 		return res.status(400).json({
@@ -40,19 +40,6 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
 			message: "year, month, and page are required",
 		});
 	}
-
-	const y = parseInt(year);
-	const m = parseInt(month);
-	const now = new Date();
-	const isFuture =
-		y > now.getFullYear() ||
-		(y === now.getFullYear() && m > now.getMonth() + 1);
-
-	req.query.year = y;
-	req.query.month = m;
-	req.query.page = parseInt(page);
-	req.query.isFuture = isFuture;
-
 	next();
 };
 
@@ -79,6 +66,5 @@ export const validateAnimeStudioAPI = (req, res, next) => {
 		});
 	}
 
-	req.query.studio = studio;
 	next();
 };

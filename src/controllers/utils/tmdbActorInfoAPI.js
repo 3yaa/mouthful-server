@@ -6,6 +6,10 @@ dotenv.config();
 
 const PROFILE_BASE = "https://image.tmdb.org/t/p/w342";
 
+//
+const APPEARANCE = /\b(?:her|him|them|it)?self\b/;
+const HOST = /\bmc\b/;
+
 export async function useTmdbShowCastAPI(req, res) {
 	try {
 		const { tmdbId } = req.query;
@@ -48,9 +52,7 @@ export async function useTmdbMovieCastAPI(req, res) {
 			const found = findData.movie_results?.[0];
 			if (!found) throw new Error("Movie not found in TMDB");
 			tmdbId = String(found.id);
-			// movieId comes off the query string, so the row has to be scoped
-			// to the caller -- without user_id this backfills whatever row the
-			// id names, including someone else's
+			// put in the tmdb for legacy
 			await pool.query(
 				"UPDATE movies SET tmdb_id=$1 WHERE id=$2 AND user_id=$3",
 				[tmdbId, movieId, req.user.id],
@@ -109,9 +111,7 @@ export async function useTmdbActorWorksAPI(req, res) {
 				: data.cast.filter((w) => {
 						const c = (w.character ?? "").toLowerCase();
 						return (
-							w.character &&
-							!c.includes("self") &&
-							!c.includes("mc")
+							w.character && !APPEARANCE.test(c) && !HOST.test(c)
 						);
 					});
 
@@ -129,11 +129,11 @@ export async function useTmdbActorWorksAPI(req, res) {
 			}))
 			.sort((a, b) => b.popularity - a.popularity)
 			.filter((w) => {
-				if (seen.has(w.title)) return false;
-				seen.add(w.title);
+				const key = `${w.media_type}-${w.id}`;
+				if (seen.has(key)) return false;
+				seen.add(key);
 				return true;
-			})
-			.slice(0, 40);
+			});
 
 		res.status(200).json({ success: true, works });
 	} catch (e) {

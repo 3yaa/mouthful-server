@@ -27,7 +27,13 @@ const toDay = (date) =>
 
 export async function useTmdbTvDiscoverAPI(req, res) {
 	try {
-		const { year, month, countryOrigin, page, isFuture } = req.query;
+		const { countryOrigin, page } = req.query;
+		const year = parseInt(req.query.year, 10);
+		const month = parseInt(req.query.month, 10);
+		const now = new Date();
+		const isFuture =
+			year > now.getFullYear() ||
+			(year === now.getFullYear() && month > now.getMonth() + 1);
 
 		// TO GET TMDBID AND POPULARITY SORT
 		const baseUrl = isFuture
