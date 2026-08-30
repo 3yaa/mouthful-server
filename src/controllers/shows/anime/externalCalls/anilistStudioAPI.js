@@ -20,13 +20,6 @@ const STUDIO_QUERY = `
           title { romaji english native }
           startDate { year month }
           coverImage { extraLarge large color }
-
-          relations {
-            edges {
-              relationType
-              node { id format episodes duration }
-            }
-          }
         }
       }
     }

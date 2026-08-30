@@ -29,6 +29,7 @@ import {
 	getMangaAdaptation,
 	shapeAnime,
 	shapeAnimeGroup,
+	noteDrop,
 } from "./utils/shapeAnimes.js";
 import { compareStartDate, pickRoot } from "./utils/utilFunctions.js";
 import { shikimoriQuery } from "./externalCalls/shikimoriAPI.js";
@@ -56,6 +57,7 @@ async function buildAnimeChain(
 	};
 
 	// PHASE 2: link to anilist
+	const dropped = [];
 	const candidates = new Set();
 	let rootId = null;
 	// shikimori's own label for each node
@@ -79,7 +81,7 @@ async function buildAnimeChain(
 	const rootAnime = enrichedNodes.get(rootId);
 	if (!rootAnime) return null;
 
-	// PHASE 3.5: drop useless additionals and also removes main nodes if its too big to exist together
+	// PHASE 3.5: drop useless additionals and big alternatives
 	for (const anilistId of [...candidates]) {
 		if (anilistId === rootId) continue;
 		const anime = enrichedNodes.get(anilistId);
@@ -87,7 +89,9 @@ async function buildAnimeChain(
 			offStory(anime, kindByAnilist.get(anilistId)) ??
 			(runsAsOwnSeries(anime) ? "own series" : null);
 		if (!reason) continue;
+		//
 		candidates.delete(anilistId);
+		noteDrop(dropped, anilistId, reason);
 	}
 	// PHASE 4: review shikimori | seperate
 	// no confirming edge is dropped
@@ -98,6 +102,7 @@ async function buildAnimeChain(
 		const anime = enrichedNodes.get(anilistId);
 		const remakes = remadeFrom(anime, anilistSpine, enrichedNodes);
 		if (remakes == null) continue;
+		// remake dropped
 		candidates.delete(anilistId);
 	}
 	const { confirmed } = reviewCandidates(
@@ -175,6 +180,7 @@ async function buildAnimeChain(
 		franchiseById,
 		fullFranchise,
 		enrichedNodes,
+		dropped,
 	);
 	// films are not a slot
 	const spineFilms = liftFilms(fullFranchise, byAnilist, enrichedNodes);
@@ -185,10 +191,16 @@ async function buildAnimeChain(
 	const rootSlot =
 		fullFranchise.find((slot) => slot.anilistId === rootId) ??
 		fullFranchise[0];
-	if (rootSlot) rootSlot.sourceManga = getMangaAdaptation(rootAnime);
+	if (rootSlot) {
+		rootSlot.sourceManga = getMangaAdaptation(rootAnime);
+		if (dropped.length) rootSlot.droppedNodes = dropped;
+	}
 
-	// 
-	return { root: shapeAnime(rootAnime, true), fullFranchise };
+	return {
+		root: shapeAnime(rootAnime, true),
+		fullFranchise,
+		dropped,
+	};
 }
 
 export async function startAnimeChain(

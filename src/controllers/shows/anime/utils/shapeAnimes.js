@@ -84,7 +84,6 @@ export function shapeAnimeGroup(anilistIds, enrichedNodes, isMainLine) {
 	for (const anilistId of anilistIds) {
 		const anime = enrichedNodes.get(anilistId);
 		if (!anime) continue;
-		//
 		const shapedAnime = shapeAnime(anime, isMainLine);
 		if (isMainLine) {
 			shapedAnime.subNodes = [];
@@ -94,4 +93,21 @@ export function shapeAnimeGroup(anilistIds, enrichedNodes, isMainLine) {
 	}
 	//
 	return shaped;
+}
+
+// -- classify drops
+
+const NOT_A_ROW = new Set([
+	"recut",
+	"bonus short",
+	"character short",
+	"unrelated",
+	"music video",
+	"advert",
+	"promo",
+]);
+
+export function noteDrop(dropped, anilistId, reason) {
+	if (anilistId == null || !NOT_A_ROW.has(reason)) return;
+	dropped.push({ anilistId, reason });
 }

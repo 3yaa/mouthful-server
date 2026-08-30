@@ -1,6 +1,5 @@
 import { fetchStudioWorks } from "./externalCalls/anilistStudioAPI.js";
 import { animeTitle } from "./utils/shapeAnimes.js";
-import { isRecapOf } from "./buildRelations/classifyNodes.js";
 
 const MIN_ROOT = 3;
 
@@ -73,21 +72,8 @@ function splitAgainstSiblings(works) {
 	return works;
 }
 
-function digestIdsIn(nodes) {
-	const ids = new Set();
-	for (const anime of nodes ?? []) {
-		for (const edge of anime?.relations?.edges ?? []) {
-			if (edge.relationType !== "SUMMARY") continue;
-			if (!isRecapOf(edge.node, anime)) continue;
-			ids.add(edge.node.id);
-		}
-	}
-	return ids;
-}
-
 // one card per entry
 export function shapeStudioWorks(nodes) {
-	const digests = digestIdsIn(nodes);
 	const shaped = (nodes ?? [])
 		.filter((anime) => anime && !anime.isAdult && animeTitle(anime))
 		.map((anime) => ({
@@ -104,7 +90,6 @@ export function shapeStudioWorks(nodes) {
 			posterColor: anime.coverImage?.color ?? null,
 			popularity: anime.popularity ?? 0,
 			score: anime.averageScore ?? null,
-			isRecap: digests.has(anime.id),
 		}));
 
 	return splitAgainstSiblings(shaped);

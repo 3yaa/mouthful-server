@@ -4,6 +4,7 @@ import {
 	isFeature,
 	isRecapOf,
 } from "./classifyNodes.js";
+import { noteDrop } from "../utils/shapeAnimes.js";
 
 const rankMap = (types) => new Map(types.map((type, rank) => [type, rank]));
 
@@ -29,7 +30,12 @@ const OWN_SERIES_ANCHORS = new Set(["PARENT", "SIDE_STORY"]);
 const SIDE_STORY_MINUTES = 12;
 
 // never places an entry
-const NOISE_RELATIONS = new Set(["CHARACTER", "OTHER"]);
+const NOISE_REASON = new Map([
+	["CHARACTER", "character short"],
+	["OTHER", "unrelated"],
+]);
+const NOISE_RELATIONS = new Set(NOISE_REASON.keys());
+const NOISE_RANK = rankMap([...NOISE_REASON.keys()]);
 
 // what the parent is to the additional, best host first -- unlisted sorts last
 const ANCHOR_RANK = rankMap([
@@ -109,12 +115,16 @@ export function relateAdditional(
 	mainlineById,
 	mainlineNodes,
 	enrichedNodes,
+	dropped = [],
 ) {
 	for (const additional of additionalAnime) {
 		const relations = relationIndex.get(additional.anilistId) ?? [];
 
 		// for cases like jjk execuation -- recap + early screening
-		if (findRecut(additional, relations, enrichedNodes)) continue;
+		if (findRecut(additional, relations, enrichedNodes)) {
+			noteDrop(dropped, additional.anilistId, "recut");
+			continue;
+		}
 
 		const anchor = pickByRank(
 			relations.filter(
@@ -123,28 +133,44 @@ export function relateAdditional(
 			ANCHOR_RANK,
 			ANCHOR_RANK.size,
 		);
-		// nothing but noise reaches the spine from here
-		if (!anchor && relations.length) continue;
+		// nothing but noise
+		if (!anchor && relations.length) {
+			const noise = pickByRank(relations, NOISE_RANK, Infinity);
+			noteDrop(
+				dropped,
+				additional.anilistId,
+				NOISE_REASON.get(noise?.relationType) ?? "unrelated",
+			);
+			continue;
+		}
 
 		const relationType = anchor?.relationType ?? null;
-		// a full tv run hanging off the chain is a series of its own
-		if (additional.format === "TV" && OWN_SERIES_ANCHORS.has(relationType))
+		// remove alternatives
+		if (
+			additional.format === "TV" &&
+			OWN_SERIES_ANCHORS.has(relationType)
+		) {
 			continue;
+		}
 
-		// a disc extra or a chibi theatre never runs an episode's length
+		// remove trash
 		if (
 			additional.kind === "sideStory" &&
 			additional.duration &&
 			additional.duration < SIDE_STORY_MINUTES
-		)
+		) {
+			noteDrop(dropped, additional.anilistId, "bonus short");
 			continue;
+		}
 
 		// pick what the parent node is
 		const parent =
 			mainlineById.get(anchor?.parentId) ??
 			findDateParent(mainlineNodes, additional);
 		// no slot to hang from
-		if (!parent) continue;
+		if (!parent) {
+			continue;
+		}
 
 		parent.subNodes.push({ ...additional, relationType });
 	}
