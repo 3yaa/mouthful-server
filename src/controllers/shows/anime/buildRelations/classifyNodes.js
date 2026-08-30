@@ -57,6 +57,8 @@ function measuredMinutes(anime) {
 	return anime.episodes * duration;
 }
 
+// drop trash
+export const SIDE_STORY_MINUTES = 12;
 //
 const RECUT_RUNTIME_RATIO = 0.6;
 export function isRecapOf(candidate, part) {
@@ -125,6 +127,16 @@ export const continuesChain = (anime) => chainsFrom(anime, PREQUEL_ONLY);
 // bootleged detected films are their own nodes -- not detected as real film
 export const continuesBroadcast = (anime) =>
 	chainsFrom(anime, BROADCAST_RELATIONS);
+
+// stops short to go on the spine
+export function isBonusShort(anime, rootAnime) {
+	const runtime = anime?.duration ?? 0;
+	if (!runtime || runtime >= SIDE_STORY_MINUTES) return false;
+	//
+	const chainRuntime = rootAnime?.duration ?? 0;
+	if (!chainRuntime) return false;
+	return runtime / chainRuntime < RECUT_RUNTIME_RATIO;
+}
 
 // detect if real film
 export function isFilm(anime, tmdbMovieId) {

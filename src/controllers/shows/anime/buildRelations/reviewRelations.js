@@ -82,3 +82,21 @@ export function reviewCandidates(candidates, enrichedNodes, spine) {
 
 	return { confirmed, rejected };
 }
+
+export function unlistedKin(candidates, enrichedNodes, byAnilist) {
+	const kin = new Set();
+
+	for (const anilistId of candidates) {
+		for (const edge of animeEdges(enrichedNodes.get(anilistId))) {
+			const otherId = edge.node.id;
+			if (candidates.has(otherId)) continue;
+			if (!CONFIRM_RELATIONS.has(edge.relationType)) continue;
+			//
+			const row = byAnilist.get(otherId);
+			if (!row || row.malId != null) continue;
+			kin.add(otherId);
+		}
+	}
+
+	return kin;
+}

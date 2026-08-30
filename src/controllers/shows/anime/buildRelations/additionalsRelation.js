@@ -3,6 +3,7 @@ import {
 	findDateParent,
 	isFeature,
 	isRecapOf,
+	SIDE_STORY_MINUTES,
 } from "./classifyNodes.js";
 import { noteDrop } from "../utils/shapeAnimes.js";
 
@@ -25,9 +26,6 @@ const RECUT_RELATIONS = new Set(["SUMMARY", "ALTERNATIVE"]);
 
 // what a spin-off says about the chain -- a continuation says PREQUEL or SEQUEL
 const OWN_SERIES_ANCHORS = new Set(["PARENT", "SIDE_STORY"]);
-
-// drop trash thats has runtime below 12 min
-const SIDE_STORY_MINUTES = 12;
 
 // relations that never place an entry on the chain.
 const NOISE_RELATIONS = new Set(["CHARACTER", "OTHER"]);

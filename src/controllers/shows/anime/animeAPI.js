@@ -5,6 +5,7 @@ import {
 } from "./buildRelations/additionalsRelation.js";
 import {
 	reviewCandidates,
+	unlistedKin,
 	walkSpine,
 } from "./buildRelations/reviewRelations.js";
 import { collapseAltCuts } from "./buildRelations/spineNodesAlts.js";
@@ -15,6 +16,7 @@ import {
 	filmTmdbId,
 	hangFilms,
 	isFeature,
+	isBonusShort,
 	isInterlude,
 	isRecapOf,
 	isFilm,
@@ -80,6 +82,20 @@ async function buildAnimeChain(
 	const enrichedNodes = await fetchAnilist([...candidates], forceRefresh);
 	const rootAnime = enrichedNodes.get(rootId);
 	if (!rootAnime) return null;
+	// go thru unlinked anilist ids
+	const kin = unlistedKin(candidates, enrichedNodes, byAnilist);
+	if (kin.size) {
+		const adopted = await fetchAnilist([...kin], forceRefresh);
+		for (const [anilistId, anime] of adopted) {
+			// remove unannouced
+			if (!Number.isInteger(anime.startDate?.year)) continue;
+			//
+			enrichedNodes.set(anilistId, anime);
+			candidates.add(anilistId);
+			// shikimori never saw it, so it carries no label of its own
+			kindByAnilist.set(anilistId, null);
+		}
+	}
 
 	// PHASE 3.5: drop useless additionals and big alternatives
 	for (const anilistId of [...candidates]) {
@@ -132,7 +148,7 @@ async function buildAnimeChain(
 		const holdsSlot =
 			(canHoldSpine(anime) ||
 				isFeature(anime) ||
-				continuesChain(anime)) &&
+				(continuesChain(anime) && !isBonusShort(anime, rootAnime))) &&
 			!interlude;
 		const onSpine =
 			anilistSpine.has(anilistId) &&
