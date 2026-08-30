@@ -1,7 +1,7 @@
 import { fetchStudioWorks } from "./externalCalls/anilistStudioAPI.js";
 import { animeTitle } from "./utils/shapeAnimes.js";
 
-// quarter precision -- anime is dated to a season, not a day
+// season, year
 function startDateOf(date) {
 	if (!Number.isInteger(date?.year)) return null;
 	return Number.isInteger(date?.month)
@@ -9,11 +9,72 @@ function startDateOf(date) {
 		: String(date.year);
 }
 
+// -- title
+
+const words = (title) =>
+	String(title ?? "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim()
+		.split(" ")
+		.filter(Boolean);
+
+// whole words, and a prefix
+const opensWith = (longer, shorter) =>
+	shorter.length > 0 &&
+	shorter.length < longer.length &&
+	shorter.every((word, i) => longer[i] === word);
+
+function cutAfterWords(title, n) {
+	let count = 0;
+	let inWord = false;
+	for (let i = 0; i < title.length; i++) {
+		const isWord = /[a-z0-9]/i.test(title[i]);
+		if (isWord && !inWord) {
+			inWord = true;
+			count++;
+		} else if (!isWord && inWord) {
+			inWord = false;
+			if (count === n) return i;
+		}
+	}
+	return count === n ? title.length : -1;
+}
+
+const trimEdges = (value) => value.replace(/^[\s:\-–—~]+|[\s:\-–—~]+$/g, "");
+
+const MIN_ROOT = 3;
+
+// drop main title from next item's
+function splitAgainstSiblings(works) {
+	const shaped = works.map((work) => ({ work, words: words(work.title) }));
+
+	for (const entry of shaped) {
+		let root = null;
+		for (const other of shaped) {
+			if (other === entry) continue;
+			if (!opensWith(entry.words, other.words)) continue;
+			if (!root || other.words.length < root.words.length) root = other;
+		}
+		const cut = root
+			? cutAfterWords(entry.work.title, root.words.length)
+			: -1;
+		const base = cut > 0 ? trimEdges(entry.work.title.slice(0, cut)) : "";
+		const part = cut > 0 ? trimEdges(entry.work.title.slice(cut)) : "";
+		// if two same
+		const split = base.length >= MIN_ROOT && part.length > 0;
+		entry.work.base = split ? base : entry.work.title;
+		entry.work.part = split ? part : null;
+	}
+
+	return works;
+}
+
 const MAX_WORKS = 48;
 
 // one card per entry
 export function shapeStudioWorks(nodes) {
-	return (nodes ?? [])
+	const shaped = (nodes ?? [])
 		.filter((anime) => anime && !anime.isAdult && animeTitle(anime))
 		.map((anime) => ({
 			anilistId: anime.id,
@@ -30,8 +91,9 @@ export function shapeStudioWorks(nodes) {
 			popularity: anime.popularity ?? 0,
 			score: anime.averageScore ?? null,
 		}))
-		.sort((a, b) => b.popularity - a.popularity)
-		.slice(0, MAX_WORKS);
+		.sort((a, b) => b.popularity - a.popularity);
+
+	return splitAgainstSiblings(shaped).slice(0, MAX_WORKS);
 }
 
 export async function useAnimeStudioAPI(req, res) {
