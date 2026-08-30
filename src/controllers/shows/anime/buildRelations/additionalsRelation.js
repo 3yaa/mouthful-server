@@ -23,6 +23,12 @@ const inverseOf = (relationType) =>
 // a shorter cut of whatever it points at
 const RECUT_RELATIONS = new Set(["SUMMARY", "ALTERNATIVE"]);
 
+// what a spin-off says about the chain -- a continuation says PREQUEL or SEQUEL
+const OWN_SERIES_ANCHORS = new Set(["PARENT", "SIDE_STORY"]);
+
+// drop trash thats has runtime below 12 min
+const SIDE_STORY_MINUTES = 12;
+
 // never places an entry -- only the reason one with no other relation leaves
 const NOISE_REASON = new Map([
 	["CHARACTER", "character short"],
@@ -147,6 +153,29 @@ export function relateAdditional(
 		}
 
 		const relationType = anchor?.relationType ?? null;
+		// remove alternatives 
+		if (
+			additional.format === "TV" &&
+			OWN_SERIES_ANCHORS.has(relationType)
+		) {
+			dropped.push(
+				dropShaped(additional, "own series", { relationType }),
+			);
+			continue;
+		}
+
+		// remove trash
+		if (
+			additional.kind === "sideStory" &&
+			additional.duration &&
+			additional.duration < SIDE_STORY_MINUTES
+		) {
+			dropped.push(
+				dropShaped(additional, "bonus short", { relationType }),
+			);
+			continue;
+		}
+
 		// pick what the parent node is
 		const parent =
 			mainlineById.get(anchor?.parentId) ??
