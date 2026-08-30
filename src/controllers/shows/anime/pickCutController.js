@@ -1,8 +1,5 @@
 import { pool } from "../../../config/db.js";
-import {
-	convertShowToCamelCase,
-	seasonsForStorage,
-} from "../showControllers.js";
+import { convertShowToCamelCase } from "../showControllers.js";
 import { applyAnimeChain } from "./animeAPI.js";
 import { activeAnimeCutIds, idOf, positionsOf } from "./utils/utilFunctions.js";
 
@@ -158,7 +155,7 @@ async function attemptCut(showId, userId, chosenId) {
 		 WHERE id=$5 AND user_id=$6 AND xmin::text=$7
 		 RETURNING *`,
 		[
-			seasonsForStorage(rebuilt.seasons),
+			JSON.stringify(rebuilt.seasons),
 			rebuilt.anilistId ?? current.anilist_id,
 			progress.seasonId,
 			progress.episode,

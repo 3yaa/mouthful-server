@@ -181,7 +181,12 @@ export function hangFilms(films, fullFranchise, enrichedNodes) {
 		const { subNodes = [], ...rest } = film;
 		slot.subNodes.push({ ...rest, placement });
 		slot.subNodes.push(
-			...subNodes.map((sub) => ({ ...sub, underFilm: film.anilistId })),
+			...subNodes.map((sub) => ({
+				...sub,
+				underFilm: film.anilistId,
+				// a side entry sits where its film sits
+				...(sub.kind === "film" ? {} : { placement }),
+			})),
 		);
 	};
 

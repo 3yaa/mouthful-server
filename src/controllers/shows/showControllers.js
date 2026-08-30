@@ -37,12 +37,6 @@ const positionsOf = (seasons) => [
 	),
 ];
 
-// droppedNodes not stored
-export const seasonsForStorage = (seasons) =>
-	Array.isArray(seasons)
-		? JSON.stringify(seasons.map(({ droppedNodes, ...slot }) => slot))
-		: null;
-
 // normal show - index | anime - id
 export const resolveSlot = (seasons, { curSeasonIndex, anilistId }) => {
 	if (!Array.isArray(seasons) || !seasons.length) return null;
@@ -230,7 +224,10 @@ export const patchShow = async (req, res) => {
 
 		// jsonb columns need the object serialised
 		if (updates["seasons"] !== undefined) {
-			updates["seasons"] = seasonsForStorage(updates["seasons"]);
+			updates["seasons"] =
+				updates["seasons"] === null
+					? null
+					: JSON.stringify(updates["seasons"]);
 		}
 
 		const keys = Object.keys(updates).filter((k) => COLUMNS[k]);
@@ -342,7 +339,7 @@ export const createShow = async (req, res) => {
 			backdropUrl,
 			logoUrl ?? null,
 			dateReleased,
-			seasonsForStorage(seasons),
+			seasons ? JSON.stringify(seasons) : null,
 			startingSeason,
 			curEpisode ?? 0,
 			status ?? "Want to Watch",

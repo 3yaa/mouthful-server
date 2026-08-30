@@ -4,7 +4,6 @@ import {
 	isFeature,
 	isRecapOf,
 } from "./classifyNodes.js";
-import { dropShaped } from "../utils/shapeAnimes.js";
 
 const rankMap = (types) => new Map(types.map((type, rank) => [type, rank]));
 
@@ -29,13 +28,8 @@ const OWN_SERIES_ANCHORS = new Set(["PARENT", "SIDE_STORY"]);
 // drop trash thats has runtime below 12 min
 const SIDE_STORY_MINUTES = 12;
 
-// never places an entry -- only the reason one with no other relation leaves
-const NOISE_REASON = new Map([
-	["CHARACTER", "character short"],
-	["OTHER", "unrelated"],
-]);
-const NOISE_RELATIONS = new Set(NOISE_REASON.keys());
-const NOISE_RANK = rankMap([...NOISE_REASON.keys()]);
+// never places an entry
+const NOISE_RELATIONS = new Set(["CHARACTER", "OTHER"]);
 
 // what the parent is to the additional, best host first -- unlisted sorts last
 const ANCHOR_RANK = rankMap([
@@ -115,22 +109,12 @@ export function relateAdditional(
 	mainlineById,
 	mainlineNodes,
 	enrichedNodes,
-	dropped = [],
 ) {
 	for (const additional of additionalAnime) {
 		const relations = relationIndex.get(additional.anilistId) ?? [];
 
-		const recut = findRecut(additional, relations, enrichedNodes);
-		if (recut) {
-			const host = mainlineById.get(recut.parentId);
-			dropped.push(
-				dropShaped(additional, "recut", {
-					relationType: recut.relationType,
-					recutOf: host?.anilistId ?? recut.parentId,
-				}),
-			);
-			continue;
-		}
+		// for cases like jjk execuation -- recap + early screening
+		if (findRecut(additional, relations, enrichedNodes)) continue;
 
 		const anchor = pickByRank(
 			relations.filter(
@@ -139,52 +123,28 @@ export function relateAdditional(
 			ANCHOR_RANK,
 			ANCHOR_RANK.size,
 		);
-		// nothing but noise
-		if (!anchor && relations.length) {
-			const noise = pickByRank(relations, NOISE_RANK, Infinity);
-			dropped.push(
-				dropShaped(
-					additional,
-					NOISE_REASON.get(noise.relationType) ?? "unrelated",
-					{ relationType: noise.relationType },
-				),
-			);
-			continue;
-		}
+		// nothing but noise reaches the spine from here
+		if (!anchor && relations.length) continue;
 
 		const relationType = anchor?.relationType ?? null;
-		// remove alternatives 
-		if (
-			additional.format === "TV" &&
-			OWN_SERIES_ANCHORS.has(relationType)
-		) {
-			dropped.push(
-				dropShaped(additional, "own series", { relationType }),
-			);
+		// a full tv run hanging off the chain is a series of its own
+		if (additional.format === "TV" && OWN_SERIES_ANCHORS.has(relationType))
 			continue;
-		}
 
-		// remove trash
+		// a disc extra or a chibi theatre never runs an episode's length
 		if (
 			additional.kind === "sideStory" &&
 			additional.duration &&
 			additional.duration < SIDE_STORY_MINUTES
-		) {
-			dropped.push(
-				dropShaped(additional, "bonus short", { relationType }),
-			);
+		)
 			continue;
-		}
 
 		// pick what the parent node is
 		const parent =
 			mainlineById.get(anchor?.parentId) ??
 			findDateParent(mainlineNodes, additional);
 		// no slot to hang from
-		if (!parent) {
-			dropped.push(dropShaped(additional, "no parent", { relationType }));
-			continue;
-		}
+		if (!parent) continue;
 
 		parent.subNodes.push({ ...additional, relationType });
 	}

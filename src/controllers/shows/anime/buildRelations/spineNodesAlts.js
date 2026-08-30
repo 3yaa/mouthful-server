@@ -1,5 +1,4 @@
 import { animeEdges, sameProduction } from "./classifyNodes.js";
-import { dropShaped } from "../utils/shapeAnimes.js";
 
 const LEAD_FORMAT_PRIORITY = new Map([
 	["TV", 0],
@@ -109,7 +108,6 @@ export function collapseAltCuts(
 	enrichedNodes,
 	rootAnilistId,
 	preferredCuts = [],
-	dropped = [],
 ) {
 	const collapsed = [];
 	const franchiseById = new Map();
@@ -127,11 +125,7 @@ export function collapseAltCuts(
 	for (const anime of mainline) {
 		const leadId = leadById.get(anime.anilistId) ?? anime.anilistId;
 		const lead = shapedById.get(leadId);
-		//
-		if (!lead) {
-			dropped.push(dropShaped(anime, "lost cut"));
-			continue;
-		}
+		if (!lead) continue;
 		// lead id and variant ids resolve to lead obj
 		franchiseById.set(anime.anilistId, lead);
 		// remove the alternative from mainline nodes

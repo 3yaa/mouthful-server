@@ -29,8 +29,6 @@ import {
 	getMangaAdaptation,
 	shapeAnime,
 	shapeAnimeGroup,
-	shapeDropped,
-	shapeUntranslated,
 } from "./utils/shapeAnimes.js";
 import { compareStartDate, pickRoot } from "./utils/utilFunctions.js";
 import { shikimoriQuery } from "./externalCalls/shikimoriAPI.js";
@@ -58,9 +56,7 @@ async function buildAnimeChain(
 	};
 
 	// PHASE 2: link to anilist
-	const dropped = [];
 	const candidates = new Set();
-	const untranslated = [];
 	let rootId = null;
 	// shikimori's own label for each node
 	const kindByAnilist = new Map();
@@ -69,12 +65,7 @@ async function buildAnimeChain(
 	for (const node of graph.nodes) {
 		const malId = Number(node.id);
 		const fribbData = byMal.get(malId);
-		//
-		if (!fribbData || fribbData.anilistId == null) {
-			untranslated.push(node);
-			dropped.push(shapeUntranslated(node));
-			continue;
-		}
+		if (!fribbData || fribbData.anilistId == null) continue;
 		//
 		const anilistId = Number(fribbData.anilistId);
 		if (malId === rootMalId) rootId = anilistId;
@@ -96,13 +87,7 @@ async function buildAnimeChain(
 			offStory(anime, kindByAnilist.get(anilistId)) ??
 			(runsAsOwnSeries(anime) ? "own series" : null);
 		if (!reason) continue;
-		//
 		candidates.delete(anilistId);
-		dropped.push(
-			shapeDropped(anime, anilistId, reason, {
-				shikimoriKind: kindByAnilist.get(anilistId) ?? null,
-			}),
-		);
 	}
 	// PHASE 4: review shikimori | seperate
 	// no confirming edge is dropped
@@ -113,31 +98,13 @@ async function buildAnimeChain(
 		const anime = enrichedNodes.get(anilistId);
 		const remakes = remadeFrom(anime, anilistSpine, enrichedNodes);
 		if (remakes == null) continue;
-		//
 		candidates.delete(anilistId);
-		dropped.push(
-			shapeDropped(anime, anilistId, "separate production", {
-				shikimoriKind: kindByAnilist.get(anilistId) ?? null,
-				remakeOf: remakes,
-			}),
-		);
 	}
-	const { confirmed, rejected } = reviewCandidates(
+	const { confirmed } = reviewCandidates(
 		candidates,
 		enrichedNodes,
 		anilistSpine,
 	);
-	// shikimori owned -- anilist can't find no edge
-	for (const anilistId of rejected) {
-		dropped.push(
-			shapeDropped(
-				enrichedNodes.get(anilistId),
-				anilistId,
-				"no link to the chain",
-				{ shikimoriKind: kindByAnilist.get(anilistId) ?? null },
-			),
-		);
-	}
 	// a subnode can sometimes carry prequel/sequel (jjk execution bridges s2 and s3)
 	const summaryTargets = new Set();
 	for (const anilistId of confirmed) {
@@ -172,24 +139,13 @@ async function buildAnimeChain(
 	}
 
 	// PHASE 5: build anime shape
-	const missingFromAnilist = [];
-	const shapedMainline = shapeAnimeGroup(
-		spineIds,
-		enrichedNodes,
-		true,
-		missingFromAnilist,
-	);
+	const shapedMainline = shapeAnimeGroup(spineIds, enrichedNodes, true);
 	// additional
 	const additionalAnime = shapeAnimeGroup(
 		additionalIds,
 		enrichedNodes,
 		false,
-		missingFromAnilist,
 	);
-	//
-	for (const anilistId of missingFromAnilist) {
-		dropped.push(shapeDropped(null, anilistId, "not on anilist"));
-	}
 	// check what kinda additional they are
 	for (const additional of additionalAnime) {
 		const node = enrichedNodes.get(additional.anilistId);
@@ -205,7 +161,6 @@ async function buildAnimeChain(
 		enrichedNodes,
 		rootId,
 		preferredCuts,
-		dropped,
 	);
 	fullFranchise.sort(compareStartDate);
 	// relate additional onto parent
@@ -220,7 +175,6 @@ async function buildAnimeChain(
 		franchiseById,
 		fullFranchise,
 		enrichedNodes,
-		dropped,
 	);
 	// films are not a slot
 	const spineFilms = liftFilms(fullFranchise, byAnilist, enrichedNodes);
@@ -231,18 +185,10 @@ async function buildAnimeChain(
 	const rootSlot =
 		fullFranchise.find((slot) => slot.anilistId === rootId) ??
 		fullFranchise[0];
-	if (rootSlot) {
-		rootSlot.sourceManga = getMangaAdaptation(rootAnime);
-		if (dropped.length) rootSlot.droppedNodes = dropped;
-	}
+	if (rootSlot) rootSlot.sourceManga = getMangaAdaptation(rootAnime);
 
-	return {
-		root: shapeAnime(rootAnime, true),
-		fullFranchise,
-		missingFromAnilist,
-		untranslated,
-		dropped,
-	};
+	// 
+	return { root: shapeAnime(rootAnime, true), fullFranchise };
 }
 
 export async function startAnimeChain(
