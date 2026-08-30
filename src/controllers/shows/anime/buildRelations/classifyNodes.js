@@ -1,3 +1,6 @@
+import { parseTitleNumber } from "../utils/parseParts.js";
+import { animeTitle } from "../utils/shapeAnimes.js";
+
 // top node
 const SPINE_FORMATS = new Set(["TV", "ONA", "MOVIE"]);
 const isShortForm = (anime) => anime?.format === "ONA" && anime?.episodes === 1;
@@ -22,6 +25,17 @@ export function offStory(anime, shikimoriKind) {
 	if (anime?.format === "TV" || anime?.format === "MOVIE") return null;
 	if ((anime?.duration ?? 0) > OFF_STORY_MINUTES) return null;
 	return shikimoriKind === "Реклама" ? "advert" : "promo";
+}
+
+// demote
+export function isInterlude(anime, tmdbMovieId) {
+	if (anime?.format === "MOVIE" || tmdbMovieId != null) return false;
+	if (!isFeature(anime)) return false;
+	//
+	const { season, part, continuesFinalSeason } = parseTitleNumber(
+		animeTitle(anime),
+	);
+	return season == null && part == null && !continuesFinalSeason;
 }
 
 // if a mainnode is too big dont want other main nodes

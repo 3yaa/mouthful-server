@@ -14,6 +14,7 @@ import {
 	filmTmdbId,
 	hangFilms,
 	isFeature,
+	isInterlude,
 	isRecapOf,
 	isFilm,
 	liftFilms,
@@ -152,17 +153,25 @@ async function buildAnimeChain(
 	// classify nodes
 	const spineIds = new Set();
 	const additionalIds = new Set();
+	// turned away from the spine
+	const interludeIds = new Set();
 	for (const anilistId of confirmed) {
 		const anime = enrichedNodes.get(anilistId);
+		const interlude = isInterlude(anime, filmTmdbId(anime, byAnilist));
+		const holdsSlot =
+			(canHoldSpine(anime) ||
+				isFeature(anime) ||
+				continuesChain(anime)) &&
+			!interlude;
 		const onSpine =
 			anilistSpine.has(anilistId) &&
 			!summaryTargets.has(anilistId) &&
-			(anilistId === rootId ||
-				canHoldSpine(anime) ||
-				isFeature(anime) ||
-				continuesChain(anime));
+			(anilistId === rootId || holdsSlot);
 		if (onSpine) spineIds.add(anilistId);
-		else additionalIds.add(anilistId);
+		else {
+			additionalIds.add(anilistId);
+			if (interlude) interludeIds.add(anilistId);
+		}
 	}
 
 	// PHASE 5: build anime shape
@@ -204,7 +213,7 @@ async function buildAnimeChain(
 	fullFranchise.sort(compareStartDate);
 	// relate additional onto parent
 	const relationIndex = buildRelationIndex(
-		spineIds,
+		new Set([...spineIds, ...interludeIds]),
 		additionalIds,
 		enrichedNodes,
 	);

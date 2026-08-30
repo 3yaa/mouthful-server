@@ -1,4 +1,4 @@
-function parseTitleNumber(title) {
+export function parseTitleNumber(title) {
 	if (!title) {
 		return {
 			season: null,

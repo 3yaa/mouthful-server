@@ -50,15 +50,17 @@ function formatStartDate(date) {
 	return parts.join("-");
 }
 
+export const animeTitle = (anime) =>
+	anime?.title?.english ??
+	anime?.title?.romaji ??
+	anime?.title?.native ??
+	null;
+
 export function shapeAnime(anime, isMainLine) {
 	return {
 		isMainLine,
 		anilistId: anime.id,
-		title:
-			anime.title?.english ??
-			anime.title?.romaji ??
-			anime.title?.native ??
-			null,
+		title: animeTitle(anime),
 		titleRomaji: anime.title?.romaji ?? null,
 		studio: getStudio(anime),
 		startDate: formatStartDate(anime.startDate),
@@ -135,11 +137,11 @@ const NO_COVER = "missing";
 // shikimori names these in Russian and slugs them in romaji, and the slug is
 // the only spelling of the two a reader here can match against the rail
 function titleFromSlug(url) {
-	const slug = String(url ?? "").split("/").pop() ?? "";
-	const words = slug
-		.replace(/^\d+-/, "")
-		.split("-")
-		.filter(Boolean);
+	const slug =
+		String(url ?? "")
+			.split("/")
+			.pop() ?? "";
+	const words = slug.replace(/^\d+-/, "").split("-").filter(Boolean);
 	if (!words.length) return null;
 	return words.map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
 }
