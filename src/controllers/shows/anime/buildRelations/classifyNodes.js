@@ -22,15 +22,14 @@ export const isFeature = (anime) =>
 		(anime?.duration ?? 0) >= FEATURE_MINUTES &&
 		(anime?.episodes ?? 1) <= 1);
 
-// music video, advert, trailers -- this is a hint
+// music video, advert, trailers
 const OFF_STORY_KINDS = new Set(["Клип", "Реклама", "Проморолик"]);
 const OFF_STORY_MINUTES = 10;
-export function offStory(anime, shikimoriKind) {
-	if (anime?.format === "MUSIC") return "music video";
-	if (!OFF_STORY_KINDS.has(shikimoriKind)) return null;
-	if (anime?.format === "TV" || anime?.format === "MOVIE") return null;
-	if ((anime?.duration ?? 0) > OFF_STORY_MINUTES) return null;
-	return shikimoriKind === "Реклама" ? "advert" : "promo";
+export function isOffStory(anime, shikimoriKind) {
+	if (anime?.format === "MUSIC") return true;
+	if (!OFF_STORY_KINDS.has(shikimoriKind)) return false;
+	if (anime?.format === "TV" || anime?.format === "MOVIE") return false;
+	return (anime?.duration ?? 0) <= OFF_STORY_MINUTES;
 }
 
 // demote

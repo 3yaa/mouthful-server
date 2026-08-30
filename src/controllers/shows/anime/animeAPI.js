@@ -19,7 +19,7 @@ import {
 	isRecapOf,
 	isFilm,
 	liftFilms,
-	offStory,
+	isOffStory,
 	remadeFrom,
 	runsAsOwnSeries,
 } from "./buildRelations/classifyNodes.js";
@@ -85,13 +85,12 @@ async function buildAnimeChain(
 	for (const anilistId of [...candidates]) {
 		if (anilistId === rootId) continue;
 		const anime = enrichedNodes.get(anilistId);
-		const reason =
-			offStory(anime, kindByAnilist.get(anilistId)) ??
-			(runsAsOwnSeries(anime) ? "own series" : null);
-		if (!reason) continue;
+		const offStory = isOffStory(anime, kindByAnilist.get(anilistId));
+		const ownSeries = runsAsOwnSeries(anime);
+		if (!offStory && !ownSeries) continue;
 		//
 		candidates.delete(anilistId);
-		noteDrop(dropped, anilistId, reason);
+		if (offStory) noteDrop(dropped, anilistId);
 	}
 	// PHASE 4: review shikimori | seperate
 	// no confirming edge is dropped

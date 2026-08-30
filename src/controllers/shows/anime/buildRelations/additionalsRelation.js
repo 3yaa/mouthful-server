@@ -29,13 +29,8 @@ const OWN_SERIES_ANCHORS = new Set(["PARENT", "SIDE_STORY"]);
 // drop trash thats has runtime below 12 min
 const SIDE_STORY_MINUTES = 12;
 
-// never places an entry
-const NOISE_REASON = new Map([
-	["CHARACTER", "character short"],
-	["OTHER", "unrelated"],
-]);
-const NOISE_RELATIONS = new Set(NOISE_REASON.keys());
-const NOISE_RANK = rankMap([...NOISE_REASON.keys()]);
+// relations that never place an entry on the chain.
+const NOISE_RELATIONS = new Set(["CHARACTER", "OTHER"]);
 
 // what the parent is to the additional, best host first -- unlisted sorts last
 const ANCHOR_RANK = rankMap([
@@ -122,7 +117,7 @@ export function relateAdditional(
 
 		// for cases like jjk execuation -- recap + early screening
 		if (findRecut(additional, relations, enrichedNodes)) {
-			noteDrop(dropped, additional.anilistId, "recut");
+			noteDrop(dropped, additional.anilistId);
 			continue;
 		}
 
@@ -135,12 +130,7 @@ export function relateAdditional(
 		);
 		// nothing but noise
 		if (!anchor && relations.length) {
-			const noise = pickByRank(relations, NOISE_RANK, Infinity);
-			noteDrop(
-				dropped,
-				additional.anilistId,
-				NOISE_REASON.get(noise?.relationType) ?? "unrelated",
-			);
+			noteDrop(dropped, additional.anilistId);
 			continue;
 		}
 
@@ -159,7 +149,7 @@ export function relateAdditional(
 			additional.duration &&
 			additional.duration < SIDE_STORY_MINUTES
 		) {
-			noteDrop(dropped, additional.anilistId, "bonus short");
+			noteDrop(dropped, additional.anilistId);
 			continue;
 		}
 

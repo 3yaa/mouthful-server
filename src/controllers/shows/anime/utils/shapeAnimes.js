@@ -95,19 +95,7 @@ export function shapeAnimeGroup(anilistIds, enrichedNodes, isMainLine) {
 	return shaped;
 }
 
-// -- classify drops
-
-const NOT_A_ROW = new Set([
-	"recut",
-	"bonus short",
-	"character short",
-	"unrelated",
-	"music video",
-	"advert",
-	"promo",
-]);
-
-export function noteDrop(dropped, anilistId, reason) {
-	if (anilistId == null || !NOT_A_ROW.has(reason)) return;
-	dropped.push({ anilistId, reason });
+export function noteDrop(dropped, anilistId) {
+	if (anilistId == null) return;
+	dropped.push({ anilistId });
 }
