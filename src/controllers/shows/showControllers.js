@@ -1,4 +1,10 @@
 import { pool } from "../../config/db.js";
+import {
+	PARTS_JOIN,
+	applyRollup,
+	loadMarks,
+	pushRowScoreDown,
+} from "./anime/animeNode/nodesStore.js";
 
 export const convertShowToCamelCase = (show) => ({
 	id: show.id,
@@ -25,7 +31,8 @@ export const convertShowToCamelCase = (show) => ({
 	imdbId: show.imdb_id,
 	anilistId: show.anilist_id,
 	franchisePoster: show.franchise_poster,
-	hiddenSides: show.hidden_sides,
+	// keyed by anilist id -- every read of a mark is a lookup by id
+	parts: show.parts ?? null,
 	userId: show.user_id,
 });
 
@@ -57,8 +64,8 @@ export const getRandomShows = async (req, res) => {
 
 		const result = await pool.query(
 			`
-      SELECT * FROM shows
-      WHERE user_id=$1 AND status='Want to Watch'
+      SELECT s.*, p.parts FROM shows s ${PARTS_JOIN}
+      WHERE s.user_id=$1 AND s.status='Want to Watch'
       ORDER BY RANDOM()
       LIMIT 10
       `,
@@ -87,10 +94,10 @@ export const getShows = async (req, res) => {
 
 		const result = await pool.query(
 			`
-			SELECT * FROM shows 
-			WHERE user_id=$1 
+			SELECT s.*, p.parts FROM shows s ${PARTS_JOIN}
+			WHERE s.user_id=$1 
 			ORDER BY 
-				CASE status
+				CASE s.status
 					WHEN 'Watching' THEN 1
 					WHEN 'Want to Watch' THEN 2
           WHEN 'Completed' THEN 3
@@ -98,8 +105,8 @@ export const getShows = async (req, res) => {
 					ELSE 4
 				END,
         CASE 
-          WHEN status = 'Completed' THEN date_completed
-          ELSE last_updated
+          WHEN s.status = 'Completed' THEN s.date_completed
+          ELSE s.last_updated
         END DESC
 		`,
 			[userId],
@@ -127,7 +134,7 @@ export const getShow = async (req, res) => {
 		const showId = req.params.id;
 		const userId = req.user.id;
 		const result = await pool.query(
-			`SELECT * FROM shows WHERE id=$1 AND user_id=$2`,
+			`SELECT s.*, p.parts FROM shows s ${PARTS_JOIN} WHERE s.id=$1 AND s.user_id=$2`,
 			[showId, userId],
 		);
 
@@ -176,10 +183,10 @@ const COLUMNS = {
 	imdbId: "imdb_id",
 	anilistId: "anilist_id",
 	franchisePoster: "franchise_poster",
-	hiddenSides: "hidden_sides",
 };
 
 export const patchShow = async (req, res) => {
+	const client = await pool.connect();
 	try {
 		const showId = req.params.id;
 		const userId = req.user.id;
@@ -190,7 +197,8 @@ export const patchShow = async (req, res) => {
 			updates.lastUpdated = new Date();
 		}
 
-		if (updates.score !== undefined) {
+		const scoreWritten = updates.score !== undefined;
+		if (scoreWritten) {
 			if (updates.score === null) {
 				updates.score_mu = null;
 				updates.score_phi = null;
@@ -201,26 +209,37 @@ export const patchShow = async (req, res) => {
 			delete updates.score;
 		}
 
-		// re-clamp ep in case a merge or a new entry
-		if (Array.isArray(updates.seasons)) {
-			// get current user position
-			const { rows } = await pool.query(
-				`SELECT cur_season_index, cur_episode, anilist_id FROM shows WHERE id=$1 AND user_id=$2`,
+		await client.query("BEGIN");
+
+		// the ep clamp needs the cursor, the push-down needs the score it is replacing
+		let before = null;
+		if (scoreWritten || Array.isArray(updates.seasons)) {
+			const { rows } = await client.query(
+				`SELECT cur_season_index, cur_episode, anilist_id, score_mu, score_phi, seasons
+				 FROM shows WHERE id=$1 AND user_id=$2 FOR UPDATE`,
 				[showId, userId],
 			);
-			if (rows.length) {
-				// show can become anime in the same patch
-				const pick = (key, col) =>
-					updates[key] !== undefined ? updates[key] : rows[0][col];
-				const slot = resolveSlot(updates.seasons, {
-					curSeasonIndex: pick("curSeasonIndex", "cur_season_index"),
-					anilistId: pick("anilistId", "anilist_id"),
-				});
-				const maxEp = slot?.episode_count ?? 0;
-				const ep = updates.curEpisode ?? rows[0].cur_episode ?? 0;
-				if (maxEp && ep > maxEp) updates.curEpisode = maxEp;
-			}
+			before = rows[0] ?? null;
 		}
+
+		// re-clamp ep in case a merge or a new entry
+		if (Array.isArray(updates.seasons) && before) {
+			// show can become anime in the same patch
+			const pick = (key, col) =>
+				updates[key] !== undefined ? updates[key] : before[col];
+			const slot = resolveSlot(updates.seasons, {
+				curSeasonIndex: pick("curSeasonIndex", "cur_season_index"),
+				anilistId: pick("anilistId", "anilist_id"),
+			});
+			const maxEp = slot?.episode_count ?? 0;
+			const ep = updates.curEpisode ?? before.cur_episode ?? 0;
+			if (maxEp && ep > maxEp) updates.curEpisode = maxEp;
+		}
+
+		// the push-down weights parts by runtime, so it needs the chain as an array
+		const chain = Array.isArray(updates.seasons)
+			? updates.seasons
+			: (before?.seasons ?? null);
 
 		// jsonb columns need the object serialised
 		if (updates["seasons"] !== undefined) {
@@ -232,6 +251,7 @@ export const patchShow = async (req, res) => {
 
 		const keys = Object.keys(updates).filter((k) => COLUMNS[k]);
 		if (!keys.length) {
+			await client.query("ROLLBACK");
 			return res.status(400).json({
 				success: false,
 				message: "No updatable fields provided",
@@ -249,18 +269,45 @@ export const patchShow = async (req, res) => {
 		UPDATE shows
 		SET ${setClause} WHERE id=$${values.length - 1} AND user_id=$${
 			values.length
-		} RETURNING * 
+		} RETURNING id
 		`;
-		const result = await pool.query(query, values);
+		const result = await client.query(query, values);
 
 		if (result.rows.length === 0) {
+			await client.query("ROLLBACK");
 			return res.status(404).json({
 				success: false,
 				message: "Show not found",
 			});
 		}
 
-		const convertedShow = convertShowToCamelCase(result.rows[0]);
+		// rolled up item is an oponnent
+		if (scoreWritten && before?.anilist_id != null) {
+			if (updates.score_mu != null) {
+				await pushRowScoreDown(
+					client,
+					showId,
+					chain,
+					await loadMarks(client, showId),
+					{ mu: before.score_mu, phi: before.score_phi },
+					{ mu: updates.score_mu, phi: updates.score_phi },
+				);
+			}
+			await applyRollup(
+				client,
+				showId,
+				chain,
+				await loadMarks(client, showId),
+			);
+		}
+
+		const saved = await client.query(
+			`SELECT s.*, p.parts FROM shows s ${PARTS_JOIN} WHERE s.id=$1`,
+			[showId],
+		);
+		await client.query("COMMIT");
+
+		const convertedShow = convertShowToCamelCase(saved.rows[0]);
 
 		res.status(200).json({
 			success: true,
@@ -268,12 +315,15 @@ export const patchShow = async (req, res) => {
 			data: convertedShow,
 		});
 	} catch (error) {
+		await client.query("ROLLBACK").catch(() => {});
 		console.error("Error updating show: ", error);
 		res.status(500).json({
 			success: false,
 			message: "Error updating show",
 			error: error.message,
 		});
+	} finally {
+		client.release();
 	}
 };
 
@@ -298,7 +348,7 @@ export const createShow = async (req, res) => {
 			imdbId,
 			anilistId,
 			franchisePoster,
-			hiddenSides,
+			parts,
 		} = req.body;
 
 		// anime -> first slot's AniList id | live-action -> index 0
@@ -326,10 +376,9 @@ export const createShow = async (req, res) => {
       imdb_id,
       anilist_id,
       franchise_poster,
-      hidden_sides,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
     ) RETURNING *
   `;
 		const values = [
@@ -351,14 +400,41 @@ export const createShow = async (req, res) => {
 			imdbId ?? null,
 			anilistId ?? null,
 			typeof franchisePoster === "boolean" ? franchisePoster : null,
-			Array.isArray(hiddenSides) && hiddenSides.length
-				? hiddenSides
-				: null,
 			userId,
 		];
 		const result = await pool.query(query, values);
+		const created = result.rows[0];
 
-		const convertedShow = convertShowToCamelCase(result.rows[0]);
+		// the add form can refuse a side entry before the row exists -- those marks ride in with it
+		if (anilistId != null && parts && typeof parts === "object") {
+			for (const [key, mark] of Object.entries(parts)) {
+				const anilistId = Number(key);
+				if (!Number.isSafeInteger(anilistId) || anilistId <= 0)
+					continue;
+				// a draft mark saying nothing is not a mark -- unhiding before the row exists leaves one
+				if (mark?.score == null && !mark?.note && !mark?.hidden)
+					continue;
+				await pool.query(
+					`INSERT INTO anime_nodes (show_id, anilist_id, score_mu, score_phi, note, hidden)
+					 VALUES ($1,$2,$3,$4,$5,$6)
+					 ON CONFLICT (show_id, anilist_id) DO NOTHING`,
+					[
+						created.id,
+						anilistId,
+						mark?.score?.mu ?? null,
+						mark?.score?.phi ?? null,
+						mark?.note ?? null,
+						!!mark?.hidden,
+					],
+				);
+			}
+		}
+
+		const saved = await pool.query(
+			`SELECT s.*, p.parts FROM shows s ${PARTS_JOIN} WHERE s.id=$1`,
+			[created.id],
+		);
+		const convertedShow = convertShowToCamelCase(saved.rows[0] ?? created);
 
 		res.status(201).json({
 			success: true,

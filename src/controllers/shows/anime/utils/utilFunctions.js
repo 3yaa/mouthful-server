@@ -75,6 +75,22 @@ export function positionsOf(seasons, hiddenSides) {
 	return out;
 }
 
+// every anilist id the row accounts for -- what a part mark is allowed to name
+export function chainIdsOf(seasons, rootId) {
+	const ids = new Set();
+	const take = (id) => Number.isSafeInteger(id) && id > 0 && ids.add(id);
+	take(Number(rootId));
+	for (const season of seasons ?? []) {
+		take(idOf(season));
+		for (const variant of season?.variants ?? []) take(idOf(variant));
+		for (const subNode of season?.subNodes ?? []) {
+			take(idOf(subNode));
+			for (const variant of subNode?.variants ?? []) take(idOf(variant));
+		}
+	}
+	return ids;
+}
+
 export async function storedAnimeState(userId, tmdbId) {
 	const { rows } = await pool.query(
 		`SELECT seasons FROM shows

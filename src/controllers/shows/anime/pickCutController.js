@@ -1,5 +1,6 @@
 import { pool } from "../../../config/db.js";
 import { convertShowToCamelCase } from "../showControllers.js";
+import { PARTS_JOIN } from "./animeNode/nodesStore.js";
 import { applyAnimeChain } from "./animeAPI.js";
 import { activeAnimeCutIds, idOf, positionsOf } from "./utils/utilFunctions.js";
 
@@ -63,7 +64,10 @@ function progressAfterRebuild(current, seasons, cut, chosenId) {
 async function attemptCut(showId, userId, chosenId) {
 	// xmin is postgres's own per-row transaction id -- every update bumps it
 	const { rows } = await pool.query(
-		`SELECT *, xmin::text AS row_version FROM shows WHERE id=$1 AND user_id=$2`,
+		`SELECT s.*, s.xmin::text AS row_version,
+			(SELECT array_agg(ap.anilist_id) FROM anime_nodes ap
+			 WHERE ap.show_id=s.id AND ap.hidden) AS hidden_sides
+		 FROM shows s WHERE s.id=$1 AND s.user_id=$2`,
 		[showId, userId],
 	);
 	if (!rows.length) {
@@ -101,12 +105,16 @@ async function attemptCut(showId, userId, chosenId) {
 		};
 	}
 	if (cut.active === cut.chosen) {
+		const withParts = await pool.query(
+			`SELECT s.*, p.parts FROM shows s ${PARTS_JOIN} WHERE s.id=$1`,
+			[showId],
+		);
 		return {
 			status: 200,
 			body: {
 				success: true,
 				message: "Anime cut already selected",
-				data: convertShowToCamelCase(current),
+				data: convertShowToCamelCase(withParts.rows[0] ?? current),
 			},
 		};
 	}
@@ -166,12 +174,27 @@ async function attemptCut(showId, userId, chosenId) {
 	);
 	if (!saved.rows.length) return { conflict: true };
 
+	// the cut swap changes which id sits in the slot -- carry the mark across or it is silently eaten
+	await pool.query(
+		`UPDATE anime_nodes SET anilist_id=$1
+		 WHERE show_id=$2 AND anilist_id=$3
+		   AND NOT EXISTS (
+			SELECT 1 FROM anime_nodes WHERE show_id=$2 AND anilist_id=$1
+		   )`,
+		[chosenId, showId, idOf(cut.active)],
+	);
+
+	const withParts = await pool.query(
+		`SELECT s.*, p.parts FROM shows s ${PARTS_JOIN} WHERE s.id=$1`,
+		[showId],
+	);
+
 	return {
 		status: 200,
 		body: {
 			success: true,
 			message: "Anime cut updated",
-			data: convertShowToCamelCase(saved.rows[0]),
+			data: convertShowToCamelCase(withParts.rows[0] ?? saved.rows[0]),
 		},
 	};
 }
