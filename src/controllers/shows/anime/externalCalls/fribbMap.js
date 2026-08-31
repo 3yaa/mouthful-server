@@ -33,6 +33,8 @@ function buildIndexRows(text) {
 	const byMal = new Map();
 	const byAnilist = new Map();
 	const byTmdb = new Map();
+	// imdb is the join the movies side comes in on
+	const byImdb = new Map();
 	//
 	for (const row of rows) {
 		const malId = row.mal_id ?? null;
@@ -70,6 +72,19 @@ function buildIndexRows(text) {
 		// set the map with trimmed info
 		byMal.set(malId, slim);
 		byAnilist.set(anilistId, slim);
+		// one row can carry several, and a film shares none with its series
+		const imdb = Array.isArray(row.imdb_id)
+			? row.imdb_id
+			: row.imdb_id
+				? [row.imdb_id]
+				: [];
+		// movie row wins -- some items sit on more than one row
+		for (const id of imdb) {
+			if (!id) continue;
+			const held = byImdb.get(id);
+			if (!held || (row.type === "MOVIE" && held.type !== "MOVIE"))
+				byImdb.set(id, slim);
+		}
 		// one TMDB series covers a whole run of AniList entries
 		for (const id of tmdbIds) {
 			const key = `${tmdbType}:${id}`;
@@ -86,7 +101,7 @@ function buildIndexRows(text) {
 
 	// null memory
 	rows = null;
-	return { byMal, byAnilist, byTmdb };
+	return { byMal, byAnilist, byTmdb, byImdb };
 }
 
 // replace the index behind whoever is being served
