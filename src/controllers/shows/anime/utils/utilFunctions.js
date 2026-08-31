@@ -65,10 +65,8 @@ export function positionsOf(seasons, hiddenSides) {
 	for (const season of seasons ?? []) {
 		out.push(season);
 		for (const subNode of season?.subNodes ?? []) {
-			if (
-				subNode?.kind === "sideStory" &&
-				!hidden.has(Number(subNode.anilistId))
-			)
+			if (hidden.has(Number(subNode.anilistId))) continue;
+			if (subNode?.kind === "sideStory" || subNode?.kind === "film")
 				out.push(subNode);
 		}
 	}

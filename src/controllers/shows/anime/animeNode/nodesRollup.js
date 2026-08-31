@@ -9,7 +9,9 @@ const runtimeOf = (part, fallback) =>
 	(Number(part?.episode_count) || 0) * (Number(part?.duration) || fallback);
 
 const isSidePart = (part) =>
-	part?.kind === "sideStory" || part?.isSide === true;
+	part?.kind === "sideStory" ||
+	(part?.kind === "film" && !part?.isMainLine) ||
+	part?.isSide === true;
 
 // the show's own typical episode length -- a blank duration not weigh 24x less than its neighbours
 function medianDuration(positions) {

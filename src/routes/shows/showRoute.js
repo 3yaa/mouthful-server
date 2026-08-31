@@ -18,7 +18,7 @@ import {
 	validateShowPart,
 } from "../../middleware/shows/validateShows.js";
 import { selectAnimeCut } from "../../controllers/shows/anime/pickCutController.js";
-import { patchShowPart } from "../../controllers/shows/anime/animeNode/nodesController.js";
+import { patchShowNode } from "../../controllers/shows/anime/animeNode/nodesController.js";
 
 const showsRouter = express.Router();
 
@@ -44,7 +44,7 @@ showsRouter.patch(
 	validateShowId,
 	validatePartId,
 	validateShowPart,
-	patchShowPart,
+	patchShowNode,
 );
 showsRouter.patch(
 	"/:id/anime/cut",

@@ -31,16 +31,18 @@ export const convertShowToCamelCase = (show) => ({
 	imdbId: show.imdb_id,
 	anilistId: show.anilist_id,
 	franchisePoster: show.franchise_poster,
-	// keyed by anilist id -- every read of a mark is a lookup by id
+	// keyed by anilist id
 	parts: show.parts ?? null,
 	userId: show.user_id,
 });
 
-// additional is apart of franchise
+// additional is apart of franchise -- films included
 const positionsOf = (seasons) => [
 	...seasons,
 	...seasons.flatMap((slot) =>
-		(slot.subNodes ?? []).filter((sub) => sub.kind === "sideStory"),
+		(slot.subNodes ?? []).filter(
+			(sub) => sub.kind === "sideStory" || sub.kind === "film",
+		),
 	),
 ];
 

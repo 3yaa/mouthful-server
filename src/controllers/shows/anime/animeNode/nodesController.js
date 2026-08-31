@@ -7,7 +7,7 @@ const fail = (res, status, message) =>
 	res.status(status).json({ success: false, message });
 
 // PATCH /shows/:id/parts/:anilistId -- score, note and hidden for one part of an anime row
-export const patchShowPart = async (req, res) => {
+export const patchShowNode = async (req, res) => {
 	const showId = req.params.id;
 	const anilistId = req.params.anilistId;
 	const userId = req.user.id;
