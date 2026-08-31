@@ -164,13 +164,7 @@ export function findDateParent(nodes, target) {
 
 // film only animes stay as slot -- homeless
 export function liftFilms(fullFranchise, byAnilist, enrichedNodes) {
-	// A cut standing in for a cour keeps the slot.
-	const standsInForACour = (slot) =>
-		(slot.variants ?? []).some(
-			(variant) => variant.variantKind === "alternate_cut",
-		);
 	const isMovie = (slot) =>
-		!standsInForACour(slot) &&
 		isFilm(enrichedNodes.get(slot.anilistId), filmTmdbId(slot, byAnilist));
 	const episodic = fullFranchise.filter((slot) => !isMovie(slot));
 	if (!episodic.length) return [];
