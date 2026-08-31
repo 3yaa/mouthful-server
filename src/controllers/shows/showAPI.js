@@ -56,9 +56,9 @@ export async function useShowRefreshAPI(req, res) {
 		const tmdbId = Number(req.query.tmdbId);
 		const storedAnime = await storedAnimeState(req.user.id, tmdbId);
 		const requestedCuts = cutIdsFromQuery(req.query.cuts);
-		const preferredCuts = storedAnime?.cuts.length
-			? storedAnime.cuts
-			: requestedCuts;
+		const preferredCuts = requestedCuts.length
+			? requestedCuts
+			: (storedAnime?.cuts ?? []);
 		const refresh = req.query.refresh === "1";
 		//
 		const pending = runAnime(req.query.forceAnime, Boolean(storedAnime))
