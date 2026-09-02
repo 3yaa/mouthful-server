@@ -59,11 +59,19 @@ function buildIndexRows(text) {
 					? [tmdb.movie]
 					: [];
 
+		// one row can carry several, and a film shares none with its series
+		const imdb = Array.isArray(row.imdb_id)
+			? row.imdb_id
+			: row.imdb_id
+				? [row.imdb_id]
+				: [];
+
 		const slim = {
 			malId,
 			anilistId,
 			tmdbId: tmdbIds[0] ?? null,
 			tmdbType,
+			imdbId: imdb[0] ?? null,
 			// season is { tvdb, tmdb }
 			season: row.season?.tmdb ?? null,
 			type: row.type ?? null,
@@ -72,12 +80,6 @@ function buildIndexRows(text) {
 		// set the map with trimmed info
 		byMal.set(malId, slim);
 		byAnilist.set(anilistId, slim);
-		// one row can carry several, and a film shares none with its series
-		const imdb = Array.isArray(row.imdb_id)
-			? row.imdb_id
-			: row.imdb_id
-				? [row.imdb_id]
-				: [];
 		// movie row wins -- some items sit on more than one row
 		for (const id of imdb) {
 			if (!id) continue;
