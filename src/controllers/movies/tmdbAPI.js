@@ -4,6 +4,7 @@ import { getLogoUrls } from "../utils/tmdbLogo.js";
 import { getBackdropUrls, getPosterUrls } from "../utils/tmdbArtwork.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 import { httpFetch } from "../utils/httpFetch.js";
+import { isAnime } from "../shows/anime/utils/isAnimeCheck.js";
 
 dotenv.config();
 
@@ -35,7 +36,8 @@ async function searchMovie(title, year) {
 // ---- 2nd call -- director | releae date | poster | backdrop | logo | tmdbID | imdbID | check belongs_to_collection (decides if call 3 is needed)
 async function getMovieDetails(tmdbId) {
 	return tmdbFetch(`/movie/${tmdbId}`, {
-		append_to_response: "credits,external_ids,images",
+		// keywords carry tmdb's own anime tag -- the cheap half of the check
+		append_to_response: "credits,external_ids,images,keywords",
 		include_image_language: "en,null",
 	});
 }
@@ -180,6 +182,11 @@ export async function useMovieTmdbAPI(req, res) {
 				logo_url: logos[0] ?? null,
 				logos,
 				series,
+				// an anime film is very often an entry on some chain rather than
+				// a film of its own. Says only "worth asking the chain gate": it
+				// costs nothing here, and it keeps every ordinary movie search off
+				// anilist's rate limit
+				isAnime: isAnime(details),
 			},
 		});
 	} catch (error) {
@@ -226,6 +233,11 @@ export async function useMovieTmdbRefreshAPI(req, res) {
 				logo_url: logos[0] ?? null,
 				logos,
 				series,
+				// an anime film is very often an entry on some chain rather than
+				// a film of its own. Says only "worth asking the chain gate": it
+				// costs nothing here, and it keeps every ordinary movie search off
+				// anilist's rate limit
+				isAnime: isAnime(details),
 			},
 		});
 	} catch (error) {

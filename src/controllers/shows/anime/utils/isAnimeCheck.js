@@ -2,13 +2,18 @@ const TMDB_ANIME_KEYWORD = 210024;
 const TMDB_ANIMATION_GENRE = 16;
 const ANIME_ORIGINS = ["JP", "CN", "KR", "TW"];
 
-// genre+origin
+// tv details name the keyword list "results", movie details name it "keywords"
+const keywordIds = (tmdbDetail) => {
+	const keywords = tmdbDetail?.keywords;
+	return (keywords?.results ?? keywords?.keywords ?? []).map((k) => k.id);
+};
+
+// genre+origin -- takes a tv or a movie detail
 export function isAnime(tmdbDetail) {
 	const genres = tmdbDetail?.genres
 		? tmdbDetail.genres.map((g) => g.id)
 		: (tmdbDetail?.genre_ids ?? []);
-	const keywords = (tmdbDetail?.keywords?.results ?? []).map((k) => k.id);
-	if (keywords.includes(TMDB_ANIME_KEYWORD)) return true;
+	if (keywordIds(tmdbDetail).includes(TMDB_ANIME_KEYWORD)) return true;
 
 	const origins = tmdbDetail?.origin_country ?? [];
 	return (
