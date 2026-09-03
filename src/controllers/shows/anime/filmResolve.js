@@ -90,6 +90,17 @@ export async function resolveAnimeFilm({ imdbId, title, year }) {
 	return { kind: "movie", why: "not on this franchise's chain" };
 }
 
+export async function animeChainRootFor(title, year) {
+	const resolved = await resolveAnimeFilm({
+		imdbId: null,
+		title,
+		// the shows search carries its year as a string -- NaN reads as no year
+		year: Number.isFinite(Number(year)) ? Number(year) : null,
+	});
+	if (resolved.kind !== "show") return null;
+	return { id: Number(resolved.tmdbId), name: resolved.showTitle };
+}
+
 // GET /movies-api/anime-film -- asked before the movies flow makes a row
 export async function useAnimeFilmResolveAPI(req, res) {
 	try {

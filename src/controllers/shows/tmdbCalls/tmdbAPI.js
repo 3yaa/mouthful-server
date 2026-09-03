@@ -3,6 +3,7 @@ import { getLogoUrls } from "../../utils/tmdbLogo.js";
 import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
 import { isAnime, runAnime } from "../anime/utils/isAnimeCheck.js";
 import { pickAnimeResult } from "../anime/utils/utilFunctions.js";
+import { animeChainRootFor } from "../anime/filmResolve.js";
 import { httpFetch } from "../../utils/httpFetch.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
@@ -45,10 +46,16 @@ export async function getTmdbId(title, year, userId, forceAnime) {
 		year ? { query: title, first_air_date_year: year } : { query: title },
 	);
 	const results = data.results ?? [];
-	const searchSaysAnime = runAnime(forceAnime, isAnime(results[0]));
+	let searchSaysAnime = runAnime(forceAnime, isAnime(results[0]));
 	// for anime go thru to find main node
-	const show =
+	let show =
 		(searchSaysAnime ? await pickAnimeResult(results) : null) ?? results[0];
+	// tmdb's tv index dont answer to the title
+	if (!show && forceAnime !== "0") {
+		show = await animeChainRootFor(title, year);
+		// the fallback answers with a chain root
+		if (show) searchSaysAnime = true;
+	}
 	if (!show) {
 		throw apiError(404, `No show found for "${title}"`, "No show results");
 	}

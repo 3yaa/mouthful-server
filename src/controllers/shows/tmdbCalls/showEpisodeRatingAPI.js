@@ -26,13 +26,13 @@ async function resolveImdbId(imdbId, tmdbId, showId, userId) {
 	return fetched;
 }
 
-async function filmRatings(ids) {
+async function filmRatings(ids, seriesImdbId) {
 	if (!ids.length) return {};
 	const fribb = await getFribbMap();
 	const imdbOf = new Map();
 	for (const id of ids) {
 		const imdbId = fribb.byAnilist.get(id)?.imdbId;
-		if (imdbId) imdbOf.set(id, imdbId);
+		if (imdbId && imdbId !== seriesImdbId) imdbOf.set(id, imdbId);
 	}
 	if (!imdbOf.size) return {};
 	const ratings = await getImdbRatings([...new Set(imdbOf.values())]);
@@ -63,7 +63,7 @@ export async function useOmdbEpisodeRatings(req, res) {
 		const [episodes, ratings, filmScores] = await Promise.all([
 			getShowEpisodes(resolvedImdbId),
 			getImdbRatings([resolvedImdbId]),
-			filmRatings(filmIds),
+			filmRatings(filmIds, resolvedImdbId),
 		]);
 
 		if (episodes.length === 0) {

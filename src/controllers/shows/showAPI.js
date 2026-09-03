@@ -44,7 +44,11 @@ export async function useShowAPI(req, res) {
 		);
 		res.json({
 			success: true,
-			data: { ...detected, ...enriched.processedShow },
+			data: {
+				...detected,
+				title: enriched.title ?? detected.title,
+				...enriched.processedShow,
+			},
 		});
 	} catch (error) {
 		sendError(res, error);
