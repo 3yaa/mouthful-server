@@ -5,6 +5,7 @@ import {
 	loadMarks,
 	pushRowScoreDown,
 } from "./anime/animeNode/nodesStore.js";
+import { positionsOf } from "./anime/utils/utilFunctions.js";
 
 export const convertShowToCamelCase = (show) => ({
 	id: show.id,
@@ -35,16 +36,6 @@ export const convertShowToCamelCase = (show) => ({
 	parts: show.parts ?? null,
 	userId: show.user_id,
 });
-
-// additional is apart of franchise -- films included
-const positionsOf = (seasons) => [
-	...seasons,
-	...seasons.flatMap((slot) =>
-		(slot.subNodes ?? []).filter(
-			(sub) => sub.kind === "sideStory" || sub.kind === "film",
-		),
-	),
-];
 
 // normal show - index | anime - id
 export const resolveSlot = (seasons, { curSeasonIndex, anilistId }) => {

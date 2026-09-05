@@ -13,11 +13,9 @@ import {
 	validateShowPatch,
 	validateShowCreate,
 	validateShowRefresh,
-	validateAnimeCut,
 	validatePartId,
 	validateShowPart,
 } from "../../middleware/shows/validateShows.js";
-import { selectAnimeCut } from "../../controllers/shows/anime/pickCutController.js";
 import { patchShowNode } from "../../controllers/shows/anime/animeNode/nodesController.js";
 
 const showsRouter = express.Router();
@@ -45,12 +43,6 @@ showsRouter.patch(
 	validatePartId,
 	validateShowPart,
 	patchShowNode,
-);
-showsRouter.patch(
-	"/:id/anime/cut",
-	validateShowId,
-	validateAnimeCut,
-	selectAnimeCut,
 );
 showsRouter.delete("/:id", validateShowId, deleteShow);
 

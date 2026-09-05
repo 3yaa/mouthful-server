@@ -171,19 +171,6 @@ export const validateShowPart = (req, res, next) => {
 	next();
 };
 
-export const validateAnimeCut = (req, res, next) => {
-	const chosenId = Number(req.body?.chosenAnilistId);
-	if (!Number.isSafeInteger(chosenId) || chosenId <= 0) {
-		return res.status(400).json({
-			success: false,
-			message: "chosenAnilistId must be a positive integer",
-		});
-	}
-	req.body.chosenAnilistId = chosenId;
-	next();
-};
-
-// metadata-only allowlist for the "reload from source" flow.
 export const validateShowRefresh = (req, res, next) => {
 	const updates = req.body;
 	const allowedFields = [

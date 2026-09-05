@@ -57,7 +57,9 @@ export function activeAnimeCutIds(seasons) {
 
 export const idOf = (item) => Number(item?.anilistId);
 
-//
+const isRefusable = (subNode) =>
+	subNode?.kind !== "film" || !subNode?.isMainLine;
+
 export function positionsOf(seasons, hiddenSides) {
 	// numbers on both sides
 	const hidden = new Set((hiddenSides ?? []).map(Number));
@@ -65,9 +67,11 @@ export function positionsOf(seasons, hiddenSides) {
 	for (const season of seasons ?? []) {
 		out.push(season);
 		for (const subNode of season?.subNodes ?? []) {
-			if (hidden.has(Number(subNode.anilistId))) continue;
-			if (subNode?.kind === "sideStory" || subNode?.kind === "film")
-				out.push(subNode);
+			if (subNode?.kind !== "sideStory" && subNode?.kind !== "film")
+				continue;
+			if (isRefusable(subNode) && hidden.has(Number(subNode.anilistId)))
+				continue;
+			out.push(subNode);
 		}
 	}
 	return out;
