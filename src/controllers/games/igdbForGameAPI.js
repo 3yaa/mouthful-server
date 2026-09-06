@@ -53,19 +53,23 @@ export async function useIgdbForGameAPI(req, res) {
 				logos: [],
 			};
 		});
-		// filter out duplicates
-		const nonDuplicateGames = [];
-		for (const game of processedGames) {
-			const isDuplicate = await checkDuplicate(
-				"games",
-				"igdb_id",
-				game.igdbId,
-				userId,
-			);
-			if (!isDuplicate) {
-				nonDuplicateGames.push(game);
-			}
+		const dupFlags = await Promise.all(
+			processedGames.map((game) =>
+				checkDuplicate("games", "igdb_id", game.igdbId, userId),
+			),
+		);
+		//
+		if (dupFlags[0]) {
+			return res.status(409).json({
+				success: false,
+				title: processedGames[0].title,
+				igdbId: processedGames[0].igdbId,
+				message: `Game "${processedGames[0].title}" already in your library`,
+				error: "Duplicate found",
+			});
 		}
+		// the rest feeds the picker, where an owned game is no use either
+		const nonDuplicateGames = processedGames.filter((_, i) => !dupFlags[i]);
 		//
 		if (nonDuplicateGames[0]) {
 			nonDuplicateGames[0].logos = logos;

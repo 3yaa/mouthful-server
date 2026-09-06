@@ -288,6 +288,8 @@ export async function useHardcoverAPI(req, res) {
 			return res.status(409).json({
 				success: false,
 				title: book.title,
+				key: String(book.id),
+				message: `Book "${book.title}" already in your library`,
 				error: "Duplicate found",
 			});
 		}

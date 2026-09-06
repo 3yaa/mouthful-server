@@ -55,6 +55,7 @@ export async function useIgdbForDlcAPI(req, res) {
       return res.status(409).json({
         success: false,
         title: processedDlc.title,
+        igdbId: processedDlc.igdbId,
         message: `Dlc "${processedDlc.title}" already in your library`,
         error: "Duplicate found",
       });
