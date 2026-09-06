@@ -31,20 +31,3 @@ export const validateTmdbIdAPI = (req, res, next) => {
 
 	next();
 };
-
-export const validateAnimeFilmAPI = (req, res, next) => {
-	const { imdbId, title } = req.query;
-	if (!imdbId && !title) {
-		return res.status(400).json({
-			success: false,
-			message: "imdbId or title is required",
-		});
-	}
-	if (imdbId !== undefined && !/^tt\d{5,12}$/.test(String(imdbId))) {
-		return res.status(400).json({
-			success: false,
-			message: "imdbId must look like tt1234567",
-		});
-	}
-	next();
-};

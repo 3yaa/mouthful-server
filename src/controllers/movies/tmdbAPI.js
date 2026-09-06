@@ -5,6 +5,7 @@ import { getBackdropUrls, getPosterUrls } from "../utils/tmdbArtwork.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 import { httpFetch } from "../utils/httpFetch.js";
 import { isAnime } from "../shows/anime/utils/isAnimeCheck.js";
+import { resolveAnimeFilm } from "../shows/anime/filmResolve.js";
 
 dotenv.config();
 
@@ -147,11 +148,29 @@ export async function useMovieTmdbAPI(req, res) {
 			});
 		}
 
-		// third call
-		const series = await resolveSeries(details, tmdbId);
+		const filmTitle = details.title || match.title;
+		const releasedYear = getReleaseYear(details.release_date);
 
-		// get imdb rating
-		const ratings = await getImdbRatings([imdbId]);
+		// find anime chain from film -- if anime film
+		const pendingAnime = isReload
+			? Promise.resolve(null)
+			: resolveAnimeFilm({
+					imdbId,
+					title: filmTitle,
+					year: releasedYear,
+					searchFallback: isAnime(details),
+				}).catch((error) => {
+					// fail silentily
+					console.warn("Anime film resolve failed: ", error.message);
+					return { kind: "movie", why: "lookup failed" };
+				});
+
+		// third call
+		const [series, ratings, animeFilm] = await Promise.all([
+			resolveSeries(details, tmdbId),
+			getImdbRatings([imdbId]),
+			pendingAnime,
+		]);
 
 		// ranked -- logo_urls
 		const logos = getLogoUrls(details.images);
@@ -167,9 +186,9 @@ export async function useMovieTmdbAPI(req, res) {
 			data: {
 				imdbId,
 				tmdb_id: tmdbId,
-				title: details.title || match.title,
+				title: filmTitle,
 				director: getDirector(details.credits),
-				released_date: getReleaseYear(details.release_date),
+				released_date: releasedYear,
 				imdbRating: ratings[imdbId]?.rating ?? null,
 				poster_url: posters[0] ?? null,
 				backdrop_url: backdrops[0] ?? null,
@@ -179,6 +198,7 @@ export async function useMovieTmdbAPI(req, res) {
 				logos,
 				series,
 				isAnime: isAnime(details),
+				...(animeFilm ? { animeFilm } : {}),
 			},
 		});
 	} catch (error) {

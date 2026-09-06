@@ -42,13 +42,17 @@ async function tvRootsOf(graph, fribb) {
 	return [...new Set(candidates.map((c) => c.tv))].slice(0, MAX_ROOTS);
 }
 
-// on some chain? builds the chain and asks -- never classifies itself
-export async function resolveAnimeFilm({ imdbId, title, year }) {
+export async function resolveAnimeFilm({
+	imdbId,
+	title,
+	year,
+	searchFallback = true,
+}) {
 	const fribb = await getFribbMap();
 	let row = rowByImdb(fribb, imdbId);
 
 	// the imdb misses are rows with a null imdb_id, mostly recent releases
-	if (!row && title) {
+	if (!row && title && searchFallback) {
 		const found = await anilistSearch(title, year);
 		if (found) row = fribb.byAnilist.get(found.id) ?? null;
 	}
@@ -99,25 +103,4 @@ export async function animeChainRootFor(title, year) {
 	});
 	if (resolved.kind !== "show") return null;
 	return { id: Number(resolved.tmdbId), name: resolved.showTitle };
-}
-
-// GET /movies-api/anime-film -- asked before the movies flow makes a row
-export async function useAnimeFilmResolveAPI(req, res) {
-	try {
-		const { imdbId, title, year } = req.query;
-		const resolved = await resolveAnimeFilm({
-			imdbId: imdbId ?? null,
-			title: title ?? null,
-			// NaN reads as no year
-			year: Number.isFinite(Number(year)) ? Number(year) : null,
-		});
-		res.json({ success: true, data: resolved });
-	} catch (error) {
-		console.error("Anime film resolve failed: ", error.message);
-		// don't blocks an add
-		res.json({
-			success: true,
-			data: { kind: "movie", why: "lookup failed" },
-		});
-	}
 }
