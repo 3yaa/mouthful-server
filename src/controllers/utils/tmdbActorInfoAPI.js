@@ -9,24 +9,33 @@ const PROFILE_BASE = "https://image.tmdb.org/t/p/w342";
 //
 const APPEARANCE = /\b(?:her|him|them|it)?self\b/;
 const HOST = /\bmc\b/;
+const CREW_JOB = { director: "Director", creator: "Creator" };
+
+// cast, crew, created_by
+const toMember = (person, billing) => ({
+	id: person.id,
+	name: person.name,
+	character: billing ?? person.character,
+	profile_path: person.profile_path
+		? `${PROFILE_BASE}${person.profile_path}`
+		: null,
+});
 
 export async function useTmdbShowCastAPI(req, res) {
 	try {
 		const { tmdbId } = req.query;
 		const tmdbRes = await httpFetch(
-			`https://api.themoviedb.org/3/tv/${tmdbId}/credits?api_key=${process.env.TMDB_API_KEY}`,
+			`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits`,
 		);
 		if (!tmdbRes.ok) throw new Error(`TMDB HTTP ${tmdbRes.status}`);
 		const data = await tmdbRes.json();
-		const cast = data.cast.slice(0, 12).map((m) => ({
-			id: m.id,
-			name: m.name,
-			character: m.character,
-			profile_path: m.profile_path
-				? `${PROFILE_BASE}${m.profile_path}`
-				: null,
-		}));
-		res.status(200).json({ success: true, cast });
+		const cast = (data.credits?.cast ?? [])
+			.slice(0, 12)
+			.map((m) => toMember(m));
+		const creators = (data.created_by ?? []).map((c) =>
+			toMember(c, "Creator"),
+		);
+		res.status(200).json({ success: true, cast, creators });
 	} catch (e) {
 		console.error("Failed to fetch cast from TMDB: ", e);
 		res.status(500).json({
@@ -64,25 +73,11 @@ export async function useTmdbMovieCastAPI(req, res) {
 		);
 		if (!tmdbRes.ok) throw new Error(`TMDB HTTP ${tmdbRes.status}`);
 		const data = await tmdbRes.json();
-		const cast = data.cast.slice(0, 12).map((m) => ({
-			id: m.id,
-			name: m.name,
-			character: m.character,
-			profile_path: m.profile_path
-				? `${PROFILE_BASE}${m.profile_path}`
-				: null,
-		}));
+		const cast = data.cast.slice(0, 12).map((m) => toMember(m));
 		//
 		const directors = data.crew
-			.filter((c) => c.job === "Director")
-			.map((d) => ({
-				id: d.id,
-				name: d.name,
-				character: "Director",
-				profile_path: d.profile_path
-					? `${PROFILE_BASE}${d.profile_path}`
-					: null,
-			}));
+			.filter((c) => c.job === CREW_JOB.director)
+			.map((d) => toMember(d, "Director"));
 		res.status(200).json({ success: true, cast, directors });
 	} catch (e) {
 		console.error("Failed to fetch movie cast from TMDB: ", e);
@@ -104,16 +99,14 @@ export async function useTmdbActorWorksAPI(req, res) {
 		const data = await tmdbRes.json();
 
 		const seen = new Set();
-		// a director's own films are crew credits
-		const credits =
-			role === "director"
-				? data.crew.filter((w) => w.job === "Director")
-				: data.cast.filter((w) => {
-						const c = (w.character ?? "").toLowerCase();
-						return (
-							w.character && !APPEARANCE.test(c) && !HOST.test(c)
-						);
-					});
+		// a director's own films and a creator's own series are crew credits
+		const job = Object.hasOwn(CREW_JOB, role ?? "") ? CREW_JOB[role] : null;
+		const credits = job
+			? data.crew.filter((w) => w.job === job)
+			: data.cast.filter((w) => {
+					const c = (w.character ?? "").toLowerCase();
+					return w.character && !APPEARANCE.test(c) && !HOST.test(c);
+				});
 
 		const works = credits
 			.filter((w) => w.popularity > 0)
