@@ -139,7 +139,6 @@ export function collapseAltCuts(
 			...variantMedia,
 			isMainLine: false,
 			variantKind: "alternate_cut",
-			relationType: "ALTERNATIVE",
 		});
 	}
 	return {

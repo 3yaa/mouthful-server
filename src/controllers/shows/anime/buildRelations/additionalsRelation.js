@@ -160,6 +160,6 @@ export function relateAdditional(
 			continue;
 		}
 
-		parent.subNodes.push({ ...additional, relationType });
+		parent.subNodes.push({ ...additional });
 	}
 }
