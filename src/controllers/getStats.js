@@ -47,24 +47,24 @@ export const getStats = async (req, res) => {
 			// most recent update
 			pool.query(
 				`
-      (SELECT 'movies' AS media, title, score_mu, score_phi, status, cover->>'url' AS image_url, last_updated,
+      (SELECT 'movies' AS media, id, title, score_mu, score_phi, status, cover->>'url' AS image_url, last_updated,
           NULL::jsonb AS seasons, NULL::integer AS cur_season_index,
           NULL::smallint AS cur_episode, NULL::integer AS anilist_id, NULL::jsonb AS parts
         FROM movies WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       UNION ALL
-      (SELECT 'books', title, score_mu, score_phi, status, cover->>'url', last_updated,
+      (SELECT 'books', id, title, score_mu, score_phi, status, cover->>'url', last_updated,
           NULL, NULL, NULL, NULL, NULL
         FROM books WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       UNION ALL
-      (SELECT 'shows', s.title, s.score_mu, s.score_phi, s.status, s.poster_url, s.last_updated,
+      (SELECT 'shows', s.id, s.title, s.score_mu, s.score_phi, s.status, s.poster_url, s.last_updated,
           s.seasons, s.cur_season_index, s.cur_episode, s.anilist_id, p.parts
         FROM shows s ${PARTS_JOIN}
         WHERE s.user_id=$1
         ORDER BY s.last_updated DESC LIMIT $2)
       UNION ALL
-      (SELECT 'games', title, score_mu, score_phi, status, cover->>'url', last_updated,
+      (SELECT 'games', id, title, score_mu, score_phi, status, cover->>'url', last_updated,
           NULL, NULL, NULL, NULL, NULL
         FROM games WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
@@ -92,6 +92,8 @@ export const getStats = async (req, res) => {
 		for (const row of recentResult.rows) {
 			recent[row.media] ??= [];
 			recent[row.media].push({
+				// what a deep link off the landing page opens the row on
+				id: row.id,
 				title: row.title,
 				score:
 					row.score_mu != null
