@@ -246,7 +246,6 @@ export const patchMovie = async (req, res) => {
 	}
 };
 
-// NEED TO VALIDATE NON-NULLABLE DATA
 export const createMovie = async (req, res) => {
 	try {
 		const userId = req.user.id;

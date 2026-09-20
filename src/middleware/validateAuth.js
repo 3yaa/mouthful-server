@@ -45,21 +45,6 @@ export const validateLogin = (req, res, next) => {
   next();
 };
 
-// check email format
-// export const validateEmailFormat = (req, res, next) => {
-//   const email = req.body.email;
-//   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-//   if (!emailRegex.test(email)) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Invalid email format",
-//     });
-//   }
-
-//   next();
-// };
-
 export const isEmailDup = async (req, res, next) => {
   try {
     const email = req.body.email;

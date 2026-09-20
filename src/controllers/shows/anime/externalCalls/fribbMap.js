@@ -159,17 +159,6 @@ export async function getFribbMap() {
 	return loadingPromise;
 }
 
-// forces a download -- manual refresh --- NOT USED
-export async function refreshFribbMap() {
-	const data = buildIndexRows(await download());
-	memCache = { data, ts: Date.now() };
-	return data;
-}
-
 // every AniList entry sitting under one TMDB id, ordered by season.
 export const rowsFor = ({ byTmdb }, tmdbId, type = "tv") =>
 	byTmdb.get(`${type}:${Number(tmdbId)}`) ?? [];
-
-export async function findByTmdb(tmdbId, type = "tv") {
-	return rowsFor(await getFribbMap(), tmdbId, type);
-}

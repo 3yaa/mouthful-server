@@ -25,7 +25,3 @@ export function getLogoUrls(images) {
 		.map((logo) => toUrl(logo.file_path));
 }
 
-// make transparent
-export function getLogoUrl(images) {
-	return getLogoUrls(images)[0] ?? null;
-}

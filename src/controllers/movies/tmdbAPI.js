@@ -93,9 +93,9 @@ async function resolveSeries(details, tmdbId) {
 export async function useMovieTmdbAPI(req, res) {
 	try {
 		const userId = req.user.id;
-		const { title, year, reload } = req.query;
-		// reloading a legacy row
+		const { title, year, reload, movieOnly } = req.query;
 		const isReload = reload === "1";
+		const filmOnly = movieOnly === "1";
 
 		// first call
 		const match = await searchMovie(title, year);
@@ -152,18 +152,22 @@ export async function useMovieTmdbAPI(req, res) {
 		const releasedYear = getReleaseYear(details.release_date);
 
 		// find anime chain from film -- if anime film
-		const pendingAnime = isReload
-			? Promise.resolve(null)
-			: resolveAnimeFilm({
-					imdbId,
-					title: filmTitle,
-					year: releasedYear,
-					searchFallback: isAnime(details),
-				}).catch((error) => {
-					// fail silentily
-					console.warn("Anime film resolve failed: ", error.message);
-					return { kind: "movie", why: "lookup failed" };
-				});
+		const pendingAnime =
+			isReload || filmOnly
+				? Promise.resolve(null)
+				: resolveAnimeFilm({
+						imdbId,
+						title: filmTitle,
+						year: releasedYear,
+						searchFallback: isAnime(details),
+					}).catch((error) => {
+						// fail silentily
+						console.warn(
+							"Anime film resolve failed: ",
+							error.message,
+						);
+						return { kind: "movie", why: "lookup failed" };
+					});
 
 		// third call
 		const [series, ratings, animeFilm] = await Promise.all([

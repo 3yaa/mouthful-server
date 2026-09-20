@@ -202,7 +202,7 @@ export const validateMovieCreate = (req, res, next) => {
 			message: "No imdbId to create movie",
 		});
 	}
-  // tmdbId
+	// tmdbId
 	if (!tmdbId) {
 		return res.status(400).json({
 			success: false,

@@ -149,7 +149,6 @@ export const validateBookRefresh = (req, res, next) => {
 		"placeInSeries",
 		"prequel",
 		"sequel",
-		// legacy openlibrary books run the full add pipeline on refresh
 		"title",
 		"author",
 		"datePublished",

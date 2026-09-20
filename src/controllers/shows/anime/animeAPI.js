@@ -248,15 +248,3 @@ export function applyChain(processedShow, chain) {
 
 	return true;
 }
-
-export async function applyAnimeChain(
-	processedShow,
-	tmdb,
-	preferredCuts = [],
-	forceRefresh = false,
-) {
-	return applyChain(
-		processedShow,
-		await startAnimeChain(tmdb, preferredCuts, forceRefresh),
-	);
-}
