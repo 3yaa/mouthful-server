@@ -231,7 +231,7 @@ async function allNeighbours(seriesList) {
 			) {
 				series_id
 				position
-				book { title }
+				book { id title }
 			}
 		}`,
 		{
@@ -252,12 +252,17 @@ async function allNeighbours(seriesList) {
 		const rows = bySeries.get(Number(s.id)) ?? [];
 		// neighbours by list index, not position ± 1 — positions can be non-contiguous (novellas land at 1.5, numbering has gaps)
 		const idx = rows.findIndex((r) => r.position === s.position);
+		// id | title
+		const at = (i) =>
+			rows[i]?.book?.id != null
+				? {
+						id: String(rows[i].book.id),
+						title: rows[i].book.title ?? null,
+					}
+				: null;
 		out[s.id] = {
-			previous: idx > 0 ? (rows[idx - 1].book?.title ?? null) : null,
-			next:
-				idx >= 0 && idx < rows.length - 1
-					? (rows[idx + 1].book?.title ?? null)
-					: null,
+			previous: idx > 0 ? at(idx - 1) : null,
+			next: idx >= 0 ? at(idx + 1) : null,
 		};
 	}
 	return out;
@@ -268,9 +273,12 @@ export async function useHardcoverAPI(req, res) {
 	try {
 		const userId = req.user.id;
 		const title = req.query.title;
+		const knownKey = req.query.key;
 
-		// {id, title, author, first_publish_year, pages, rating}
-		const [book] = await searchBooks(title);
+		// {id, title, author, first_publish_year, pages, rating} -- skipped when caller knows id
+		const book = knownKey
+			? await bookById(knownKey)
+			: (await searchBooks(title))[0];
 		if (!book) {
 			return res.status(404).json({
 				success: false,
@@ -393,13 +401,11 @@ async function assembleBook(book) {
 			color: c.color ?? "#000000",
 		})),
 		series: fullBook.series.map((s) => ({
-			series_title: s.series_title,
+			title: s.series_title,
+			position: s.position != null ? String(s.position) : null,
 			total: s.total,
-			position: s.position ? String(s.position) : null,
-			prequel: s.previous,
-			sequel: s.next,
-			//
-			details: s.details,
+			prequel: s.previous ?? null,
+			sequel: s.next ?? null,
 		})),
 	};
 }

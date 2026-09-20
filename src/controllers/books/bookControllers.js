@@ -8,10 +8,7 @@ const convertBookToCamelCase = (book) => ({
 	numPages: book.num_pages,
 	rating: book.rating,
 	datePublished: book.date_published,
-	seriesTitle: book.series_title,
-	placeInSeries: book.place_in_series,
-	prequel: book.prequel,
-	sequel: book.sequel,
+	series: book.series ?? null,
 	status: book.status,
 	score: book.score_mu ? { mu: book.score_mu, phi: book.score_phi } : null,
 	dateCompleted: book.date_completed,
@@ -130,10 +127,7 @@ const COLUMNS = {
 	numPages: "num_pages",
 	rating: "rating",
 	datePublished: "date_published",
-	seriesTitle: "series_title",
-	placeInSeries: "place_in_series",
-	prequel: "prequel",
-	sequel: "sequel",
+	series: "series",
 	status: "status",
 	score_mu: "score_mu",
 	score_phi: "score_phi",
@@ -221,10 +215,7 @@ export const createBook = async (req, res) => {
 			author,
 			cover: coverObj,
 			datePublished,
-			seriesTitle,
-			placeInSeries,
-			prequel,
-			sequel,
+			series,
 			status,
 			score: scoreObj,
 			dateCompleted,
@@ -240,10 +231,7 @@ export const createBook = async (req, res) => {
       author,
       cover,
       date_published,
-      series_title,
-      place_in_series,
-      prequel,
-      sequel,
+      series,
       status,
       score_mu,
       score_phi,
@@ -254,7 +242,7 @@ export const createBook = async (req, res) => {
       rating,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
     ) RETURNING *
 	`;
 		const values = [
@@ -262,10 +250,7 @@ export const createBook = async (req, res) => {
 			author,
 			coverObj,
 			datePublished,
-			seriesTitle,
-			placeInSeries,
-			prequel,
-			sequel,
+			series ?? null,
 			status,
 			scoreObj?.mu,
 			scoreObj?.phi,

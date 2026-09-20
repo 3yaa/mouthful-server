@@ -102,10 +102,7 @@ export const validateBookPatch = (req, res, next) => {
 		"status",
 		"note",
 		"dateCompleted",
-		"seriesTitle",
-		"placeInSeries",
-		"prequel",
-		"sequel",
+		"series",
 	];
 	// for status
 	if (updates.status && !VALID_STATUSES.includes(updates.status)) {
@@ -145,10 +142,7 @@ export const validateBookRefresh = (req, res, next) => {
 		"cover",
 		"numPages",
 		"rating",
-		"seriesTitle",
-		"placeInSeries",
-		"prequel",
-		"sequel",
+		"series",
 		"title",
 		"author",
 		"datePublished",

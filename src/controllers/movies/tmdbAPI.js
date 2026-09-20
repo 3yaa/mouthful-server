@@ -74,14 +74,20 @@ async function resolveSeries(details, tmdbId) {
 			(part) => String(part.id) === String(tmdbId),
 		);
 		if (index === -1) return null;
+		// id | title
+		const at = (i) =>
+			parts[i]
+				? { id: String(parts[i].id), title: parts[i].title ?? null }
+				: null;
 		//
 		return {
 			// removes collection from all series title
-			series_title:
+			title:
 				collection.name?.replace(/\s*Collection$/i, "").trim() || null,
 			position: String(index + 1),
-			prequel: parts[index - 1]?.title ?? null,
-			sequel: parts[index + 1]?.title ?? null,
+			total: parts.length,
+			prequel: at(index - 1),
+			sequel: at(index + 1),
 		};
 	} catch (error) {
 		console.error("TMDB collection fetch failed: ", error.message);
@@ -93,12 +99,14 @@ async function resolveSeries(details, tmdbId) {
 export async function useMovieTmdbAPI(req, res) {
 	try {
 		const userId = req.user.id;
-		const { title, year, reload, movieOnly } = req.query;
+		const { title, year, reload, movieOnly, tmdbId: knownId } = req.query;
 		const isReload = reload === "1";
 		const filmOnly = movieOnly === "1";
 
-		// first call
-		const match = await searchMovie(title, year);
+		// first call -- skipped when the caller knows id
+		const match = knownId
+			? { id: knownId, title }
+			: await searchMovie(title, year);
 		if (!match) {
 			return res.status(404).json({
 				success: false,

@@ -101,10 +101,7 @@ export const validateMoviePatch = (req, res, next) => {
 		"status",
 		"note",
 		"dateCompleted",
-		"seriesTitle",
-		"placeInSeries",
-		"prequel",
-		"sequel",
+		"series",
 	];
 	// for status
 	if (updates.status && !VALID_STATUSES.includes(updates.status)) {
@@ -144,10 +141,7 @@ export const validateMovieRefresh = (req, res, next) => {
 		"cover",
 		"backdropUrl",
 		"logoUrl",
-		"seriesTitle",
-		"placeInSeries",
-		"prequel",
-		"sequel",
+		"series",
 		// legacy have no tmdb id -- a full reload resolves and writes one
 		"tmdbId",
 		"director",

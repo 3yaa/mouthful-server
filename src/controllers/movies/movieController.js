@@ -21,10 +21,7 @@ const convertMovieToCamelCase = (movie) => ({
 	backdropUrl: movie.backdrop_url,
 	logoUrl: movie.logo_url,
 	dateReleased: movie.date_released,
-	seriesTitle: movie.series_title,
-	placeInSeries: movie.place_in_series,
-	prequel: movie.prequel,
-	sequel: movie.sequel,
+	series: movie.series ?? null,
 	status: movie.status,
 	score:
 		movie.score_mu != null
@@ -156,10 +153,7 @@ const COLUMNS = {
 	backdropUrl: "backdrop_url",
 	logoUrl: "logo_url",
 	dateReleased: "date_released",
-	seriesTitle: "series_title",
-	placeInSeries: "place_in_series",
-	prequel: "prequel",
-	sequel: "sequel",
+	series: "series",
 	status: "status",
 	score_mu: "score_mu",
 	score_phi: "score_phi",
@@ -256,10 +250,7 @@ export const createMovie = async (req, res) => {
 			backdropUrl,
 			logoUrl,
 			dateReleased,
-			seriesTitle,
-			placeInSeries,
-			prequel,
-			sequel,
+			series,
 			status,
 			score: scoreObj,
 			dateCompleted,
@@ -276,10 +267,7 @@ export const createMovie = async (req, res) => {
       backdrop_url,
       logo_url,
       date_released,
-      series_title,
-      place_in_series,
-      prequel,
-      sequel,
+      series,
       status,
       score_mu,
       score_phi,
@@ -289,7 +277,7 @@ export const createMovie = async (req, res) => {
       tmdb_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
     ) RETURNING *
   `;
 		const values = [
@@ -299,10 +287,7 @@ export const createMovie = async (req, res) => {
 			backdropUrl,
 			logoUrl ?? null,
 			dateReleased,
-			seriesTitle,
-			placeInSeries,
-			prequel,
-			sequel,
+			series ?? null,
 			status,
 			scoreObj?.mu ?? null,
 			scoreObj?.phi ?? null,

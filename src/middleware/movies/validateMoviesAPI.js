@@ -1,5 +1,5 @@
 export const validateMovieMetaAPI = (req, res, next) => {
-	const { title, year } = req.query;
+	const { title, year, tmdbId } = req.query;
 
 	if (!title || !title.trim()) {
 		return res.status(400).json({
@@ -15,6 +15,9 @@ export const validateMovieMetaAPI = (req, res, next) => {
 	} else {
 		req.query.year = String(parsedYear);
 	}
+
+	if (tmdbId && /^\d+$/.test(tmdbId)) req.query.tmdbId = tmdbId;
+	else delete req.query.tmdbId;
 
 	next();
 };
