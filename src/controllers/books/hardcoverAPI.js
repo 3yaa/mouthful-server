@@ -254,11 +254,8 @@ async function allNeighbours(seriesList) {
 		const idx = rows.findIndex((r) => r.position === s.position);
 		// id | title
 		const at = (i) =>
-			rows[i]?.book?.id != null
-				? {
-						id: String(rows[i].book.id),
-						title: rows[i].book.title ?? null,
-					}
+			rows[i]?.book?.id != null && rows[i].book.title
+				? { id: String(rows[i].book.id), title: rows[i].book.title }
 				: null;
 		out[s.id] = {
 			previous: idx > 0 ? at(idx - 1) : null,

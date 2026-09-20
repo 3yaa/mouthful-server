@@ -76,8 +76,8 @@ async function resolveSeries(details, tmdbId) {
 		if (index === -1) return null;
 		// id | title
 		const at = (i) =>
-			parts[i]
-				? { id: String(parts[i].id), title: parts[i].title ?? null }
+			parts[i]?.id != null && parts[i]?.title
+				? { id: String(parts[i].id), title: parts[i].title }
 				: null;
 		//
 		return {
