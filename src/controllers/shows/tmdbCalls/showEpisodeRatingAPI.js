@@ -26,7 +26,7 @@ async function resolveImdbId(imdbId, tmdbId, showId, userId) {
 	return fetched;
 }
 
-async function filmRatings(ids, seriesImdbId) {
+async function movieRatings(ids, seriesImdbId) {
 	if (!ids.length) return {};
 	const fribb = await getFribbMap();
 	const imdbOf = new Map();
@@ -46,9 +46,9 @@ async function filmRatings(ids, seriesImdbId) {
 
 export async function useOmdbEpisodeRatings(req, res) {
 	try {
-		const { imdbId, tmdbId, showId, films } = req.query;
-		// the anilist ids of the films on the chain, when the caller has any
-		const filmIds = String(films ?? "")
+		const { imdbId, tmdbId, showId, movies } = req.query;
+		// the anilist ids of the movies on the chain, when the caller has any
+		const movieIds = String(movies ?? "")
 			.split(",")
 			.map((id) => Number(id))
 			.filter((id) => Number.isSafeInteger(id) && id > 0);
@@ -60,10 +60,10 @@ export async function useOmdbEpisodeRatings(req, res) {
 			req.user.id,
 		);
 
-		const [episodes, ratings, filmScores] = await Promise.all([
+		const [episodes, ratings, movieScores] = await Promise.all([
 			getShowEpisodes(resolvedImdbId),
 			getImdbRatings([resolvedImdbId]),
-			filmRatings(filmIds, resolvedImdbId),
+			movieRatings(movieIds, resolvedImdbId),
 		]);
 
 		if (episodes.length === 0) {
@@ -90,8 +90,8 @@ export async function useOmdbEpisodeRatings(req, res) {
 				rating: seriesEntry?.rating ?? null,
 				votes: seriesEntry?.votes ?? null,
 			},
-			// keyed by anilist id -- the chain has no other name for a film
-			films: filmScores,
+			// keyed by anilist id -- the chain has no other name for a movie
+			movies: movieScores,
 			data,
 		});
 	} catch (error) {

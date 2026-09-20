@@ -40,7 +40,7 @@ export const cutIdsFromQuery = (cuts) =>
 		.map(Number)
 		.filter((id) => Number.isSafeInteger(id) && id > 0);
 
-// take film out of the slot
+// take movie out of the slot
 export function activeAnimeCutIds(seasons) {
 	const active = [];
 	for (const season of seasons ?? []) {

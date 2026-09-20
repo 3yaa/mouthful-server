@@ -59,7 +59,7 @@ function buildIndexRows(text) {
 					? [tmdb.movie]
 					: [];
 
-		// one row can carry several, and a film shares none with its series
+		// one row can carry several, and a movie shares none with its series
 		const imdb = Array.isArray(row.imdb_id)
 			? row.imdb_id
 			: row.imdb_id

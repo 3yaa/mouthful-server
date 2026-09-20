@@ -99,7 +99,7 @@ export async function useTmdbActorWorksAPI(req, res) {
 		const data = await tmdbRes.json();
 
 		const seen = new Set();
-		// a director's own films and a creator's own series are crew credits
+		// a director's own movies and a creator's own series are crew credits
 		const job = Object.hasOwn(CREW_JOB, role ?? "") ? CREW_JOB[role] : null;
 		const credits = job
 			? data.crew.filter((w) => w.job === job)

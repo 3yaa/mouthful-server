@@ -3,7 +3,7 @@ import { getLogoUrls } from "../../utils/tmdbLogo.js";
 import { getBackdropUrls, getPosterUrls } from "../../utils/tmdbArtwork.js";
 import { isAnime, runAnime } from "../anime/utils/isAnimeCheck.js";
 import { pickAnimeResult } from "../anime/utils/utilFunctions.js";
-import { animeChainRootFor } from "../anime/filmResolve.js";
+import { animeChainRootFor } from "../anime/movieResolve.js";
 import { httpFetch } from "../../utils/httpFetch.js";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";

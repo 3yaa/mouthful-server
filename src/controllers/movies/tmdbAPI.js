@@ -5,7 +5,7 @@ import { getBackdropUrls, getPosterUrls } from "../utils/tmdbArtwork.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 import { httpFetch } from "../utils/httpFetch.js";
 import { isAnime } from "../shows/anime/utils/isAnimeCheck.js";
-import { resolveAnimeFilm } from "../shows/anime/filmResolve.js";
+import { resolveAnimeMovie } from "../shows/anime/movieResolve.js";
 
 dotenv.config();
 
@@ -101,7 +101,7 @@ export async function useMovieTmdbAPI(req, res) {
 		const userId = req.user.id;
 		const { title, year, reload, movieOnly, tmdbId: knownId } = req.query;
 		const isReload = reload === "1";
-		const filmOnly = movieOnly === "1";
+		const onlyMovie = movieOnly === "1";
 
 		// first call -- skipped when the caller knows id
 		const match = knownId
@@ -156,29 +156,29 @@ export async function useMovieTmdbAPI(req, res) {
 			});
 		}
 
-		const filmTitle = details.title || match.title;
+		const movieTitle = details.title || match.title;
 		const releasedYear = getReleaseYear(details.release_date);
 
-		// find anime chain from film -- if anime film
+		// find anime chain from movie -- if anime movie
 		const pendingAnime =
-			isReload || filmOnly
+			isReload || onlyMovie
 				? Promise.resolve(null)
-				: resolveAnimeFilm({
+				: resolveAnimeMovie({
 						imdbId,
-						title: filmTitle,
+						title: movieTitle,
 						year: releasedYear,
 						searchFallback: isAnime(details),
 					}).catch((error) => {
 						// fail silentily
 						console.warn(
-							"Anime film resolve failed: ",
+							"Anime movie resolve failed: ",
 							error.message,
 						);
 						return { kind: "movie", why: "lookup failed" };
 					});
 
 		// third call
-		const [series, ratings, animeFilm] = await Promise.all([
+		const [series, ratings, animeMovie] = await Promise.all([
 			resolveSeries(details, tmdbId),
 			getImdbRatings([imdbId]),
 			pendingAnime,
@@ -198,7 +198,7 @@ export async function useMovieTmdbAPI(req, res) {
 			data: {
 				imdbId,
 				tmdb_id: tmdbId,
-				title: filmTitle,
+				title: movieTitle,
 				director: getDirector(details.credits),
 				released_date: releasedYear,
 				imdbRating: ratings[imdbId]?.rating ?? null,
@@ -210,7 +210,7 @@ export async function useMovieTmdbAPI(req, res) {
 				logos,
 				series,
 				isAnime: isAnime(details),
-				...(animeFilm ? { animeFilm } : {}),
+				...(animeMovie ? { animeMovie } : {}),
 			},
 		});
 	} catch (error) {

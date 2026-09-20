@@ -13,7 +13,7 @@ const isShortForm = (anime) => anime?.format === "ONA" && anime?.episodes === 1;
 export const canHoldSpine = (anime) =>
 	SPINE_FORMATS.has(anime?.format) && !isShortForm(anime);
 
-// make 45 minute feature a film even if its labeled something else
+// make 45 minute feature a movie even if its labeled something else
 const FEATURE_MINUTES = 45;
 const FEATURE_FORMATS = new Set(["SPECIAL", "OVA", "ONA"]);
 export const isFeature = (anime) =>
@@ -79,7 +79,7 @@ export function sameProduction(a, b) {
 	const yearB = b.startDate?.year;
 	if (!yearA || !yearB) return null;
 	if (Math.abs(yearA - yearB) > REMAKE_GAP_YEARS) return false;
-	// season and the film cut out of it while it aired
+	// season and the movie cut out of it while it aired
 	if ((a.format === "MOVIE") !== (b.format === "MOVIE")) return true;
 	//
 	const minutesA = measuredMinutes(a);
@@ -124,7 +124,7 @@ function chainsFrom(anime, relations) {
 // continues main node chain
 export const continuesChain = (anime) => chainsFrom(anime, PREQUEL_ONLY);
 
-// bootleged detected films are their own nodes -- not detected as real film
+// bootleged detected movies are their own nodes -- not detected as real movie
 export const continuesBroadcast = (anime) =>
 	chainsFrom(anime, BROADCAST_RELATIONS);
 
@@ -138,14 +138,14 @@ export function isBonusShort(anime, rootAnime) {
 	return runtime / chainRuntime < RECUT_RUNTIME_RATIO;
 }
 
-// detect if real film
-export function isFilm(anime, tmdbMovieId) {
+// detect if real movie
+export function isMovie(anime, tmdbMovieId) {
 	if (anime?.format === "MOVIE") return true;
 	if (tmdbMovieId != null) return true;
 	return isFeature(anime) && !continuesBroadcast(anime);
 }
 
-export function filmTmdbId(anime, byAnilist) {
+export function movieTmdbId(anime, byAnilist) {
 	const mapped = byAnilist?.get(anime?.anilistId ?? anime?.id);
 	return mapped?.tmdbType === "movie" ? (mapped.tmdbId ?? null) : null;
 }
@@ -162,61 +162,61 @@ export function findDateParent(nodes, target) {
 	return parent ?? nodes[0] ?? null;
 }
 
-// film only animes stay as slot -- homeless
-export function liftFilms(fullFranchise, byAnilist, enrichedNodes) {
+// movie only animes stay as slot -- homeless
+export function liftMovies(fullFranchise, byAnilist, enrichedNodes) {
 	const isMovie = (slot) =>
-		isFilm(enrichedNodes.get(slot.anilistId), filmTmdbId(slot, byAnilist));
+		isMovie(enrichedNodes.get(slot.anilistId), movieTmdbId(slot, byAnilist));
 	const episodic = fullFranchise.filter((slot) => !isMovie(slot));
 	if (!episodic.length) return [];
 	//
-	const films = fullFranchise.filter(isMovie).map((film) => ({
-		...film,
+	const movies = fullFranchise.filter(isMovie).map((movie) => ({
+		...movie,
 		kind: "film",
 		isMainLine: true,
-		tmdbMovieId: filmTmdbId(film, byAnilist),
+		tmdbMovieId: movieTmdbId(movie, byAnilist),
 	}));
 	//
 	fullFranchise.length = 0;
 	fullFranchise.push(...episodic);
-	return films;
+	return movies;
 }
 
-// attach film to the spine -- release date is fallback
-export function hangFilms(films, fullFranchise, enrichedNodes) {
-	if (!films.length || !fullFranchise.length) return;
+// attach movie to the spine -- release date is fallback
+export function hangMovies(movies, fullFranchise, enrichedNodes) {
+	if (!movies.length || !fullFranchise.length) return;
 	const slotsById = new Map(
 		fullFranchise.map((slot) => [slot.anilistId, slot]),
 	);
-	// a film's subnode attach to parent film
-	const hang = (slot, film, placement) => {
-		const { subNodes = [], ...rest } = film;
+	// a movie's subnode attach to parent movie
+	const hang = (slot, movie, placement) => {
+		const { subNodes = [], ...rest } = movie;
 		slot.subNodes.push({ ...rest, placement });
 		slot.subNodes.push(
 			...subNodes.map((sub) => ({
 				...sub,
-				underFilm: film.anilistId,
-				// a side entry sits where its film sits
+				underMovie: movie.anilistId,
+				// a side entry sits where its movie sits
 				...(sub.kind === "film" ? {} : { placement }),
 			})),
 		);
 	};
 
-	for (const film of films) {
-		const edges = animeEdges(enrichedNodes.get(film.anilistId)).filter(
+	for (const movie of movies) {
+		const edges = animeEdges(enrichedNodes.get(movie.anilistId)).filter(
 			(edge) => slotsById.has(edge.node.id),
 		);
 		const before = edges.find((edge) => edge.relationType === "SEQUEL");
 		if (before) {
-			hang(slotsById.get(before.node.id), film, "before");
+			hang(slotsById.get(before.node.id), movie, "before");
 			continue;
 		}
 
 		const after = edges.find((edge) => edge.relationType === "PREQUEL");
 		if (after) {
-			hang(slotsById.get(after.node.id), film, "after");
+			hang(slotsById.get(after.node.id), movie, "after");
 			continue;
 		}
 
-		hang(findDateParent(fullFranchise, film), film, "after");
+		hang(findDateParent(fullFranchise, movie), movie, "after");
 	}
 }

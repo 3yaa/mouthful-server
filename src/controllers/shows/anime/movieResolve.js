@@ -22,7 +22,7 @@ function anilistIdsOf(graph, byMal) {
 	return out;
 }
 
-// tv ids the chain could root on, earliest first -- a film-only graph has none
+// tv ids the chain could root on, earliest first -- a movie-only graph has none
 async function tvRootsOf(graph, fribb) {
 	const ids = anilistIdsOf(graph, fribb.byMal);
 	if (!ids.length) return [];
@@ -42,7 +42,7 @@ async function tvRootsOf(graph, fribb) {
 	return [...new Set(candidates.map((c) => c.tv))].slice(0, MAX_ROOTS);
 }
 
-export async function resolveAnimeFilm({
+export async function resolveAnimeMovie({
 	imdbId,
 	title,
 	year,
@@ -74,18 +74,18 @@ export async function resolveAnimeFilm({
 	if (!roots.length)
 		return { kind: "movie", why: "no series for a chain to be rooted on" };
 
-	const filmId = Number(row.anilistId);
+	const movieId = Number(row.anilistId);
 	for (const tv of roots) {
 		const chain = await startAnimeChain(tv);
 		if (!chain?.fullFranchise?.length) continue;
-		if (!chainIdsOf(chain.fullFranchise, chain.root?.anilistId).has(filmId))
+		if (!chainIdsOf(chain.fullFranchise, chain.root?.anilistId).has(movieId))
 			continue;
 		return {
 			kind: "show",
 			why: `on the ${chain.root?.title} chain`,
 			showTitle: chain.root?.title ?? null,
 			tmdbId: String(tv),
-			anilistId: filmId,
+			anilistId: movieId,
 			// spine parts, not the length of the watch order
 			parts: chain.fullFranchise.length,
 		};
@@ -95,7 +95,7 @@ export async function resolveAnimeFilm({
 }
 
 export async function animeChainRootFor(title, year) {
-	const resolved = await resolveAnimeFilm({
+	const resolved = await resolveAnimeMovie({
 		imdbId: null,
 		title,
 		// the shows search carries its year as a string -- NaN reads as no year

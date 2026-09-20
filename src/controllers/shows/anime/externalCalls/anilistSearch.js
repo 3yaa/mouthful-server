@@ -1,7 +1,7 @@
 import { anilistRequest } from "./anilistClient.js";
 
 const SEARCH_QUERY = `
-  query FilmSearch($search: String) {
+  query MovieSearch($search: String) {
     Page(perPage: 6) {
       media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
         id
@@ -15,7 +15,7 @@ const SEARCH_QUERY = `
   }
 `;
 
-// how far off tmdb's year a match may sit -- a film released either side of new year
+// how far off tmdb's year a match may sit -- a movie released either side of new year
 const YEAR_SLACK = 1;
 
 export async function anilistSearch(title, year) {
@@ -26,7 +26,7 @@ export async function anilistSearch(title, year) {
 			await anilistRequest(
 				SEARCH_QUERY,
 				{ search: title },
-				{ cacheKey: "FilmSearch" },
+				{ cacheKey: "MovieSearch" },
 			)
 		)?.Page?.media;
 	} catch {

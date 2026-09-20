@@ -13,14 +13,14 @@ import {
 	animeEdges,
 	canHoldSpine,
 	continuesChain,
-	filmTmdbId,
-	hangFilms,
+	movieTmdbId,
+	hangMovies,
 	isFeature,
 	isBonusShort,
 	isInterlude,
 	isRecapOf,
-	isFilm,
-	liftFilms,
+	isMovie,
+	liftMovies,
 	isOffStory,
 	remadeFrom,
 	runsAsOwnSeries,
@@ -144,7 +144,7 @@ async function buildAnimeChain(
 	const additionalIds = new Set();
 	for (const anilistId of confirmed) {
 		const anime = enrichedNodes.get(anilistId);
-		const interlude = isInterlude(anime, filmTmdbId(anime, byAnilist));
+		const interlude = isInterlude(anime, movieTmdbId(anime, byAnilist));
 		const holdsSlot =
 			(canHoldSpine(anime) ||
 				isFeature(anime) ||
@@ -169,8 +169,8 @@ async function buildAnimeChain(
 	// check what kinda additional they are
 	for (const additional of additionalAnime) {
 		const node = enrichedNodes.get(additional.anilistId);
-		const tmdbMovieId = filmTmdbId(additional, byAnilist);
-		additional.kind = isFilm(node, tmdbMovieId) ? "film" : "sideStory";
+		const tmdbMovieId = movieTmdbId(additional, byAnilist);
+		additional.kind = isMovie(node, tmdbMovieId) ? "film" : "sideStory";
 		if (additional.kind === "film") additional.tmdbMovieId = tmdbMovieId;
 	}
 
@@ -197,9 +197,9 @@ async function buildAnimeChain(
 		enrichedNodes,
 		dropped,
 	);
-	// films are not a slot
-	const spineFilms = liftFilms(fullFranchise, byAnilist, enrichedNodes);
-	hangFilms(spineFilms, fullFranchise, enrichedNodes);
+	// movies are not a slot
+	const spineMovies = liftMovies(fullFranchise, byAnilist, enrichedNodes);
+	hangMovies(spineMovies, fullFranchise, enrichedNodes);
 	//
 	applyPartsForSeason(fullFranchise, compareStartDate);
 	// what rides on the root
