@@ -164,12 +164,12 @@ export function findDateParent(nodes, target) {
 
 // movie only animes stay as slot -- homeless
 export function liftMovies(fullFranchise, byAnilist, enrichedNodes) {
-	const isMovie = (slot) =>
+	const isMovieSlot = (slot) =>
 		isMovie(enrichedNodes.get(slot.anilistId), movieTmdbId(slot, byAnilist));
-	const episodic = fullFranchise.filter((slot) => !isMovie(slot));
+	const episodic = fullFranchise.filter((slot) => !isMovieSlot(slot));
 	if (!episodic.length) return [];
 	//
-	const movies = fullFranchise.filter(isMovie).map((movie) => ({
+	const movies = fullFranchise.filter(isMovieSlot).map((movie) => ({
 		...movie,
 		kind: "film",
 		isMainLine: true,
