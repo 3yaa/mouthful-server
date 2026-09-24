@@ -45,18 +45,16 @@ export async function useIgdbForDlcAPI(req, res) {
       };
     });
     // check for duplicate
-    const isDuplicate = await checkDuplicate(
-      "games",
-      "igdb_id",
-      processedDlc.igdbId,
-      userId
-    );
+    const [mainDlc] = processedDlc;
+    const isDuplicate =
+      mainDlc &&
+      (await checkDuplicate("games", "igdb_id", mainDlc.igdbId, userId));
     if (isDuplicate) {
       return res.status(409).json({
         success: false,
-        title: processedDlc.title,
-        igdbId: processedDlc.igdbId,
-        message: `Dlc "${processedDlc.title}" already in your library`,
+        title: mainDlc.title,
+        igdbId: mainDlc.igdbId,
+        message: `Dlc "${mainDlc.title}" already in your library`,
         error: "Duplicate found",
       });
     }

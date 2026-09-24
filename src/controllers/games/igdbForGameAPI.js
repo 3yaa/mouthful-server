@@ -2,12 +2,20 @@ import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
 import { checkDuplicate } from "../utils/checkDuplicate.js";
 import { getSteamGridLogos } from "../utils/steamGridLogo.js";
 
+// mod, season, pack, update, and editions
+const SKIPPED_GAME_TYPES = [5, 7, 13, 14].join(",");
+const escapeApicalypse = (text) => text.replace(/["\\]/g, "\\$&");
+const normalizeName = (name) =>
+	String(name ?? "")
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, "");
+
 export async function useIgdbForGameAPI(req, res) {
 	try {
 		const userId = req.user.id;
 		const { title, limit } = req.query;
 		const query = `
-      search "${title}";
+      search "${escapeApicalypse(title)}";
       fields 
         id, name,
         cover.image_id,
@@ -15,6 +23,7 @@ export async function useIgdbForGameAPI(req, res) {
         first_release_date,
         involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
         screenshots.image_id;
+      where game_type != (${SKIPPED_GAME_TYPES}) & version_parent = null;
       limit ${limit};
     `;
 		//
@@ -31,7 +40,13 @@ export async function useIgdbForGameAPI(req, res) {
 		}
 		// data clean
 		const data = await response.json();
-		const games = data || [];
+		// igdb ranks by its own relevance
+		const wanted = normalizeName(title);
+		const games = (data || []).toSorted(
+			(a, b) =>
+				(normalizeName(b.name) === wanted) -
+				(normalizeName(a.name) === wanted),
+		);
 		const processedGames = games.map((game) => {
 			return {
 				igdbId: game.id,

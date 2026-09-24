@@ -20,9 +20,9 @@ const getReleaseYear = (airDate) => {
 
 const joinNames = (list) => (list ?? []).map((c) => c.name).join(", ");
 
-// use production company as fallback
+// use lead production company as fallback
 export const getCreator = (show) =>
-	joinNames(show.created_by) || joinNames(show.production_companies) || null;
+	joinNames(show.created_by) || show.production_companies?.[0]?.name || null;
 
 // base call
 export async function tmdbFetch(path, params = {}) {
