@@ -18,9 +18,11 @@ const getReleaseYear = (airDate) => {
 	return Number.isInteger(year) ? year : null;
 };
 
-//
+const joinNames = (list) => (list ?? []).map((c) => c.name).join(", ");
+
+// use production company as fallback
 export const getCreator = (show) =>
-	(show.created_by ?? []).map((c) => c.name).join(", ") || null;
+	joinNames(show.created_by) || joinNames(show.production_companies) || null;
 
 // base call
 export async function tmdbFetch(path, params = {}) {
