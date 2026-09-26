@@ -24,6 +24,9 @@ export const getStats = async (req, res) => {
 			UNION ALL
 			SELECT 'games', status, COUNT(*) 
 				FROM games WHERE user_id=$1 GROUP BY status
+			UNION ALL
+			SELECT 'manga', status, COUNT(*) 
+				FROM manga WHERE user_id=$1 GROUP BY status
 			`,
 				[userId],
 			),
@@ -41,6 +44,9 @@ export const getStats = async (req, res) => {
       UNION ALL
       SELECT 'games', ROUND(AVG(score_mu / 200.0)::numeric, 1)
         FROM games WHERE user_id=$1 AND score_mu IS NOT NULL
+      UNION ALL
+      SELECT 'manga', ROUND(AVG(score_mu / 200.0)::numeric, 1)
+        FROM manga WHERE user_id=$1 AND score_mu IS NOT NULL
       `,
 				[userId],
 			),
@@ -49,24 +55,30 @@ export const getStats = async (req, res) => {
 				`
       (SELECT 'movies' AS media, id, title, score_mu, score_phi, status, cover->>'url' AS image_url, last_updated,
           NULL::jsonb AS seasons, NULL::integer AS cur_season_index,
-          NULL::smallint AS cur_episode, NULL::integer AS anilist_id, NULL::jsonb AS parts
+          NULL::smallint AS cur_episode, NULL::integer AS anilist_id, NULL::jsonb AS parts,
+          NULL::integer AS cur_chapter, NULL::integer AS chapters
         FROM movies WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       UNION ALL
       (SELECT 'books', id, title, score_mu, score_phi, status, cover->>'url', last_updated,
-          NULL, NULL, NULL, NULL, NULL
+          NULL, NULL, NULL, NULL, NULL, NULL, NULL
         FROM books WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       UNION ALL
       (SELECT 'shows', s.id, s.title, s.score_mu, s.score_phi, s.status, s.poster_url, s.last_updated,
-          s.seasons, s.cur_season_index, s.cur_episode, s.anilist_id, p.parts
+          s.seasons, s.cur_season_index, s.cur_episode, s.anilist_id, p.parts, NULL, NULL
         FROM shows s ${PARTS_JOIN}
         WHERE s.user_id=$1
         ORDER BY s.last_updated DESC LIMIT $2)
       UNION ALL
       (SELECT 'games', id, title, score_mu, score_phi, status, cover->>'url', last_updated,
-          NULL, NULL, NULL, NULL, NULL
+          NULL, NULL, NULL, NULL, NULL, NULL, NULL
         FROM games WHERE user_id=$1
+        ORDER BY last_updated DESC LIMIT $2)
+      UNION ALL
+      (SELECT 'manga', id, title, score_mu, score_phi, status, cover->>'url', last_updated,
+          NULL, NULL, NULL, anilist_id, NULL, cur_chapter, chapters
+        FROM manga WHERE user_id=$1
         ORDER BY last_updated DESC LIMIT $2)
       `,
 				[userId, recentLimit],
@@ -83,7 +95,8 @@ export const getStats = async (req, res) => {
 		}
 		// avg score
 		for (const row of avgResult.rows) {
-			if (stats[row.media]) {
+			// AVG over no scored rows is NULL, not 0
+			if (stats[row.media] && row.avg_score != null) {
 				stats[row.media].avgScore = Number(row.avg_score);
 			}
 		}
@@ -108,6 +121,10 @@ export const getStats = async (req, res) => {
 					curEpisode: row.cur_episode,
 					anilistId: row.anilist_id,
 					parts: row.parts ?? null,
+				}),
+				...(row.media === "manga" && {
+					curChapter: row.cur_chapter,
+					chapters: row.chapters,
 				}),
 			});
 		}

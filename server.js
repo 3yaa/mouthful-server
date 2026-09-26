@@ -11,11 +11,13 @@ import { booksAPIRouter } from "./src/routes/books/booksAPIRoute.js";
 import { moviesAPIRouter } from "./src/routes/movies/moviesAPIRoute.js";
 import { showsAPIRouter } from "./src/routes/shows/showsAPIRoute.js";
 import { gamesAPIRouter } from "./src/routes/games/gamesAPIRoute.js";
+import { mangaAPIRouter } from "./src/routes/manga/mangaAPIRoute.js";
 //
 import { booksRouter } from "./src/routes/books/booksRoute.js";
 import { moviesRouter } from "./src/routes/movies/moviesRoute.js";
 import { showsRouter } from "./src/routes/shows/showRoute.js";
 import { gamesRouter } from "./src/routes/games/gamesRoute.js";
+import { mangaRouter } from "./src/routes/manga/mangaRoute.js";
 import { getStats } from "./src/controllers/getStats.js";
 import { getImdbRatings } from "./src/controllers/imdbRating/imdbRatingCache.js";
 import { getShowEpisodes } from "./src/controllers/imdbRating/imdbEpRatingCache.js";
@@ -62,11 +64,13 @@ app.use("/shows-api", showsAPIRouter);
 app.use("/movies-api", moviesAPIRouter);
 app.use("/books-api", booksAPIRouter);
 app.use("/games-api", gamesAPIRouter);
+app.use("/manga-api", mangaAPIRouter);
 // media internal api routers
 app.use("/shows", showsRouter);
 app.use("/movies", moviesRouter);
 app.use("/books", booksRouter);
 app.use("/games", gamesRouter);
+app.use("/manga", mangaRouter);
 
 app.listen(PORT, () => {
 	console.log(`server running on PORT: ${PORT}`);
