@@ -48,6 +48,38 @@ const BY_ID_QUERY = `
   }
 `;
 
+const AUTHOR_QUERY = `
+  query AuthorWorks($search: String, $page: Int, $sort: [MediaSort]) {
+    Staff(search: $search) {
+      id
+      name { full }
+      staffMedia(type: MANGA, sort: $sort, page: $page, perPage: 25) {
+        pageInfo { hasNextPage }
+        edges {
+          staffRole
+          node {
+            id
+            format
+            status
+            chapters
+            popularity
+            averageScore
+            isAdult
+            title { romaji english }
+            startDate { year }
+            coverImage { extraLarge color }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const AUTHOR_SORTS = {
+	popular: ["POPULARITY_DESC"],
+	recent: ["START_DATE_DESC"],
+};
+
 // a running serial has no final count, whatever anilist last guessed
 const RUNNING = new Set(["RELEASING", "HIATUS", "NOT_YET_RELEASED"]);
 const CREATOR_ROLE = /^(story|art|original)/i;
@@ -116,6 +148,37 @@ async function mangaById(id, bypassCache = false) {
 		{ cacheKey: "MangaById", bypassCache },
 	);
 	return data?.Media ?? null;
+}
+
+function shapeAuthorWorks(edges) {
+	const byId = new Map();
+	for (const { staffRole, node } of edges ?? []) {
+		const role = String(staffRole ?? "").replace(/\s*\(.*\)$/, "");
+		if (!node || node.isAdult || node.format === "NOVEL") continue;
+		if (!CREATOR_ROLE.test(role)) continue;
+		const known = byId.get(node.id);
+		if (known) {
+			if (!known.roles.includes(role)) known.roles.push(role);
+			continue;
+		}
+		byId.set(node.id, {
+			anilistId: node.id,
+			title: titleOf(node),
+			format: node.format ?? null,
+			status: node.status ?? null,
+			chapters: RUNNING.has(node.status) ? null : (node.chapters ?? null),
+			startYear: node.startDate?.year ?? null,
+			posterUrl: node.coverImage?.extraLarge ?? null,
+			posterColor: node.coverImage?.color ?? null,
+			popularity: node.popularity ?? 0,
+			score: node.averageScore ?? null,
+			roles: [role],
+		});
+	}
+	return [...byId.values()].map(({ roles, ...work }) => ({
+		...work,
+		role: roles.join(", "),
+	}));
 }
 
 // collection
@@ -223,6 +286,44 @@ export async function useAnilistMangaRefreshAPI(req, res) {
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch manga from AniList",
+			error: e.message,
+		});
+	}
+}
+
+// one page of an author's manga
+export async function useAnilistAuthorAPI(req, res) {
+	try {
+		const { name, page, sort } = req.validated;
+
+		const data = await anilistRequest(
+			AUTHOR_QUERY,
+			{ search: name, page, sort: AUTHOR_SORTS[sort] },
+			{ cacheKey: "AuthorWorks" },
+		).catch((e) => {
+			if (e.status === 404) return null;
+			throw e;
+		});
+		const staff = data?.Staff;
+		if (!staff) {
+			return res.status(404).json({
+				success: false,
+				message: `No author named ${name}`,
+			});
+		}
+
+		res.status(200).json({
+			success: true,
+			author: { id: staff.id, name: staff.name?.full ?? name },
+			works: shapeAuthorWorks(staff.staffMedia?.edges),
+			page,
+			hasMore: !!staff.staffMedia?.pageInfo?.hasNextPage,
+		});
+	} catch (e) {
+		console.error("AniList author works fetch failed: ", e);
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch author works from AniList",
 			error: e.message,
 		});
 	}

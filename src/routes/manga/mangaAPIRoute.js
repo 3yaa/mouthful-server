@@ -2,11 +2,13 @@ import express from "express";
 import {
 	validateMangaAPI,
 	validateAnilistId,
+	validateAuthorAPI,
 } from "../../middleware/manga/validateMangaAPI.js";
 import {
 	useAnilistMangaAPI,
 	useAnilistMangaMultiAPI,
 	useAnilistMangaRefreshAPI,
+	useAnilistAuthorAPI,
 } from "../../controllers/manga/anilistMangaAPI.js";
 
 const mangaAPIRouter = express.Router();
@@ -18,5 +20,7 @@ mangaAPIRouter.get(
 	validateAnilistId,
 	useAnilistMangaRefreshAPI,
 );
+
+mangaAPIRouter.get("/anilist-author", validateAuthorAPI, useAnilistAuthorAPI);
 
 export { mangaAPIRouter };
