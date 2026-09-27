@@ -1,5 +1,5 @@
 const MAX_NOTE_LENGTH = 1000;
-const VALID_STATUSES = ["Want to Read", "Completed", "Dropped"];
+const VALID_STATUSES = ["Reading", "Want to Read", "Completed", "Dropped"];
 
 export const validateBookId = (req, res, next) => {
 	const bookId = req.params.id;
@@ -109,7 +109,7 @@ export const validateBookPatch = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message:
-				"Invalid status field provided ('Want to Read' | 'Completed' | 'Dropped')",
+				"Invalid status field provided ('Reading' | 'Want to Read' | 'Completed' | 'Dropped')",
 		});
 	}
 	// check if exists
@@ -195,7 +195,7 @@ export const validateBookCreate = (req, res, next) => {
 			return res.status(400).json({
 				success: false,
 				message:
-					"Invalid status provided ('Want to Read' | 'Completed' | 'Dropped')",
+					"Invalid status provided ('Reading' | 'Want to Read' | 'Completed' | 'Dropped')",
 			});
 		}
 	}

@@ -57,10 +57,11 @@ export const getBooks = async (req, res) => {
       WHERE user_id=$1 
       ORDER BY 
         CASE status
-          WHEN 'Want to Read' THEN 1
-          WHEN 'Completed' THEN 2
-          WHEN 'Dropped' THEN 3
-          ELSE 4
+          WHEN 'Reading' THEN 1
+          WHEN 'Want to Read' THEN 2
+          WHEN 'Completed' THEN 3
+          WHEN 'Dropped' THEN 4
+          ELSE 5
         END,
         CASE 
           WHEN status = 'Completed' THEN date_completed

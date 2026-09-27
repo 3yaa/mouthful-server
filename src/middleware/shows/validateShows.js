@@ -1,5 +1,11 @@
 const MAX_NOTE_LENGTH = 1000;
-const VALID_STATUSES = ["Watching", "Want to Watch", "Completed", "Dropped"];
+const VALID_STATUSES = [
+	"Watching",
+	"Want to Watch",
+	"Completed",
+	"On Hold",
+	"Dropped",
+];
 
 // shared so a row score and a part score can never drift apart
 const badScore = (score) =>
@@ -93,7 +99,7 @@ export const validateShowPatch = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message:
-				"Invalid status field provided ('Watching' | 'Want to Watch' | 'Completed' | 'Dropped')",
+				"Invalid status field provided ('Watching' | 'On Hold' | 'Want to Watch' | 'Completed' | 'Dropped')",
 		});
 	}
 	// check if exists
@@ -234,7 +240,7 @@ export const validateShowCreate = (req, res, next) => {
 			return res.status(400).json({
 				success: false,
 				message:
-					"Invalid status provided ('Watching' | 'Want to Watch' | 'Completed' | 'Dropped')",
+					"Invalid status provided ('Watching' | 'On Hold' | 'Want to Watch' | 'Completed' | 'Dropped')",
 			});
 		}
 	}

@@ -93,9 +93,10 @@ export const getShows = async (req, res) => {
 				CASE s.status
 					WHEN 'Watching' THEN 1
 					WHEN 'Want to Watch' THEN 2
-          WHEN 'Completed' THEN 3
-					WHEN 'Dropped' THEN 4
-					ELSE 4
+					WHEN 'Completed' THEN 3
+					WHEN 'On Hold' THEN 4
+					WHEN 'Dropped' THEN 5
+					ELSE 6
 				END,
         CASE 
           WHEN s.status = 'Completed' THEN s.date_completed
