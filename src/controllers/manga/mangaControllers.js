@@ -7,6 +7,7 @@ const convertMangaToCamelCase = (manga) => ({
 	cover: manga.cover ?? null,
 	chapters: manga.chapters,
 	curChapter: manga.cur_chapter,
+	chapterLength: manga.chapter_length ?? null,
 	rating: manga.rating,
 	datePublished: manga.date_published,
 	series: manga.series ?? null,
@@ -128,6 +129,7 @@ const COLUMNS = {
 	cover: "cover",
 	chapters: "chapters",
 	curChapter: "cur_chapter",
+	chapterLength: "chapter_length",
 	rating: "rating",
 	datePublished: "date_published",
 	series: "series",
@@ -232,6 +234,7 @@ export const createManga = async (req, res) => {
 			datePublished,
 			chapters,
 			curChapter,
+			chapterLength,
 			rating,
 			series,
 			status,
@@ -249,6 +252,7 @@ export const createManga = async (req, res) => {
       date_published,
       chapters,
       cur_chapter,
+      chapter_length,
       rating,
       series,
       status,
@@ -259,7 +263,7 @@ export const createManga = async (req, res) => {
       anilist_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
     ) RETURNING *
 	`;
 		const values = [
@@ -269,6 +273,7 @@ export const createManga = async (req, res) => {
 			datePublished,
 			chapters ?? null,
 			curChapter ?? 0,
+			chapterLength ?? null,
 			rating,
 			series ?? null,
 			status,

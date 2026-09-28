@@ -5,6 +5,15 @@ const VALID_STATUSES = ["Reading", "Want to Read", "Completed", "Dropped"];
 const badChapter = (value) =>
 	!Number.isInteger(value) || value < 0 || value > MAX_CHAPTER;
 
+const CHAPTER_LENGTHS = ["short", "medium", "long"];
+const badLength = (value) => value != null && !CHAPTER_LENGTHS.includes(value);
+const lengthError = (res) =>
+	res.status(400).json({
+		success: false,
+		message:
+			"Invalid chapterLength field provided ('short' | 'medium' | 'long' or null)",
+	});
+
 export const validateMangaId = (req, res, next) => {
 	const mangaId = req.params.id;
 
@@ -146,6 +155,7 @@ export const validateMangaRefresh = (req, res, next) => {
 		"author",
 		"datePublished",
 		"anilistId",
+		"chapterLength",
 	];
 	// check if exists
 	if (!updates || Object.keys(updates).length === 0) {
@@ -176,6 +186,7 @@ export const validateMangaRefresh = (req, res, next) => {
 				"Invalid chapters field provided (must be a non-negative integer or null)",
 		});
 	}
+	if (badLength(updates.chapterLength)) return lengthError(res);
 
 	next();
 };
@@ -190,6 +201,7 @@ export const validateMangaCreate = (req, res, next) => {
 		chapters,
 		curChapter,
 		rating,
+		chapterLength,
 	} = req.body;
 	// REQUIRED FIELDS
 	// title
@@ -273,6 +285,7 @@ export const validateMangaCreate = (req, res, next) => {
 				"Invalid curChapter field provided (must be a non-negative integer)",
 		});
 	}
+	if (badLength(chapterLength)) return lengthError(res);
 	// rating
 	if (rating !== undefined && rating !== null) {
 		if (
