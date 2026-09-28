@@ -12,6 +12,7 @@ const convertGameToCamelCase = (game) => ({
 	mainTitle: game.main_title,
 	dlcIndex: game.dlc_index,
 	dlcs: game.dlcs,
+	timeToBeat: game.time_to_beat ?? null,
 	status: game.status,
 	score:
 		game.score_mu != null
@@ -137,6 +138,7 @@ const COLUMNS = {
 	mainTitle: "main_title",
 	dlcIndex: "dlc_index",
 	dlcs: "dlcs",
+	timeToBeat: "time_to_beat",
 	status: "status",
 	score_mu: "score_mu",
 	score_phi: "score_phi",
@@ -234,6 +236,7 @@ export const createGame = async (req, res) => {
 			mainTitle,
 			dlcIndex,
 			dlcs,
+			timeToBeat,
 			status,
 			score: scoreObj,
 			dateCompleted,
@@ -252,6 +255,7 @@ export const createGame = async (req, res) => {
       main_title,
       dlc_index,
       dlcs,
+      time_to_beat,
       status,
       score_mu, 
       score_phi, 
@@ -260,7 +264,7 @@ export const createGame = async (req, res) => {
       igdb_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
     ) RETURNING *
   `;
 		const values = [
@@ -273,6 +277,7 @@ export const createGame = async (req, res) => {
 			mainTitle,
 			dlcIndex,
 			dlcs ? JSON.stringify(dlcs) : null,
+			timeToBeat ?? null,
 			status,
 			scoreObj?.mu ?? null,
 			scoreObj?.phi ?? null,

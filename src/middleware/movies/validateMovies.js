@@ -17,6 +17,9 @@ const isInvalidGenres = (genres) =>
 	genres.length > 20 ||
 	genres.some((g) => typeof g !== "string" || !g || g.length > 50);
 
+const isInvalidMinutes = (minutes) =>
+	!Number.isInteger(minutes) || minutes <= 0 || minutes > 1_000_000;
+
 export const validateMovieId = (req, res, next) => {
 	const movieId = req.params.id;
 
@@ -152,6 +155,7 @@ export const validateMovieRefresh = (req, res, next) => {
 		"director",
 		"dateReleased",
 		"genres",
+		"runtime",
 		"title",
 	];
 	// check if exists
@@ -191,13 +195,28 @@ export const validateMovieRefresh = (req, res, next) => {
 			});
 		}
 	}
+	// runtime
+	if (updates.runtime != null && isInvalidMinutes(updates.runtime)) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid runtime field provided (must be minutes or null)",
+		});
+	}
 
 	next();
 };
 
 export const validateMovieCreate = (req, res, next) => {
-	const { title, dateReleased, status, imdbId, tmdbId, cover, genres } =
-		req.body;
+	const {
+		title,
+		dateReleased,
+		status,
+		imdbId,
+		tmdbId,
+		cover,
+		genres,
+		runtime,
+	} = req.body;
 	// REQUIRED FIELDS
 	// title
 	if (!title || title.trim() === "") {
@@ -268,6 +287,13 @@ export const validateMovieCreate = (req, res, next) => {
 					"Invalid genres field provided (must be string[] or null)",
 			});
 		}
+	}
+	// runtime
+	if (runtime != null && isInvalidMinutes(runtime)) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid runtime field provided (must be minutes or null)",
+		});
 	}
 
 	next();

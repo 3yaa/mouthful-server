@@ -1,5 +1,6 @@
 import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
 import { getSteamGridLogos } from "../utils/steamGridLogo.js";
+import { getTimesToBeat } from "./igdbInternal/timeToBeat.js";
 
 // refetch a single game/dlc by its IGDB id -- no duplicate filtering, so it can
 export async function useIgdbRefreshAPI(req, res) {
@@ -40,7 +41,10 @@ export async function useIgdbRefreshAPI(req, res) {
 			});
 		}
 		//
-		const logos = presetLogos ?? (await getSteamGridLogos(game.name));
+		const [logos, times] = await Promise.all([
+			presetLogos ?? getSteamGridLogos(game.name),
+			getTimesToBeat([game.id]),
+		]);
 
 		const processedGame = {
 			igdbId: game.id,
@@ -58,6 +62,7 @@ export async function useIgdbRefreshAPI(req, res) {
 			screenshot_urls: (game.screenshots || []).map((ss) => ({
 				ss_url: `https://images.igdb.com/igdb/image/upload/t_1080p/${ss.image_id}.jpg`,
 			})),
+			time_to_beat: times[game.id] ?? null,
 			logo_url: logos[0] ?? null,
 			logos,
 		};

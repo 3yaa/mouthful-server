@@ -74,10 +74,34 @@ export async function getTmdbId(title, year, userId, forceAnime) {
 	return { ...showDetect, searchSaysAnime };
 }
 
+const APPEND_CAP = 20;
+const BASE_APPENDS = ["external_ids", "images", "keywords"];
+const seasonAppends = (numbers) => numbers.map((n) => `season/${n}`);
+
+const mean = (list) =>
+	list.length ? list.reduce((sum, n) => sum + n, 0) / list.length : null;
+
+// an appended season's average episode, in minutes
+const seasonMinutes = (season) =>
+	mean(
+		(season?.episodes ?? [])
+			.map((episode) => episode.runtime)
+			.filter((minutes) => minutes > 0),
+	);
+
 // --- 2nd call
-export async function getTmdbShowEnrichment(tmdbId) {
+export async function getTmdbShowEnrichment(tmdbId, withRuntimes = false) {
+	// the numbers are unknown until this answers, so guess 1..17
+	const guessed = withRuntimes
+		? Array.from(
+				{ length: APPEND_CAP - BASE_APPENDS.length },
+				(_, i) => i + 1,
+			)
+		: [];
 	const show = await tmdbFetch(`/tv/${tmdbId}`, {
-		append_to_response: "external_ids,images,keywords",
+		append_to_response: [...BASE_APPENDS, ...seasonAppends(guessed)].join(
+			",",
+		),
 		include_image_language: "en,null",
 	});
 	// check if valid
@@ -109,10 +133,58 @@ export async function getTmdbShowEnrichment(tmdbId) {
 			})),
 	};
 
+	// season number -> minutes, for the seasons that came back
+	const runtimes = new Map(
+		guessed
+			.filter((n) => show[`season/${n}`])
+			.map((n) => [n, seasonMinutes(show[`season/${n}`])]),
+	);
+
 	return {
 		title: show.name ?? null,
 		nativeTitle: show.original_name ?? null,
 		processedShow,
 		wantAnime: isAnime(show),
+		runtimes,
 	};
+}
+
+// an episode's minutes per season, as duration
+export async function addSeasonRuntimes(
+	processedShow,
+	tmdbId,
+	runtimes = new Map(),
+) {
+	const seasons = processedShow.seasons ?? [];
+	if (
+		!seasons.length ||
+		seasons.some((s) => s.anilistId != null || s.season_number == null)
+	)
+		return;
+	// past the first 17, or numbered oddly -- 20 to a call
+	const missing = seasons
+		.map((season) => season.season_number)
+		.filter((n) => !runtimes.has(n));
+	const batches = [];
+	for (let i = 0; i < missing.length; i += APPEND_CAP)
+		batches.push(missing.slice(i, i + APPEND_CAP));
+	await Promise.all(
+		batches.map(async (batch) => {
+			try {
+				const data = await tmdbFetch(`/tv/${tmdbId}`, {
+					append_to_response: seasonAppends(batch).join(","),
+				});
+				for (const n of batch)
+					runtimes.set(n, seasonMinutes(data[`season/${n}`]));
+			} catch (error) {
+				console.error("TMDB season runtime failed: ", error.message);
+			}
+		}),
+	);
+	// a season yet to air borrows the show's usual length
+	const usual = mean([...runtimes.values()].filter((m) => m != null));
+	for (const season of seasons) {
+		const minutes = runtimes.get(season.season_number) ?? usual;
+		if (minutes) season.duration = Math.round(minutes * 10) / 10;
+	}
 }

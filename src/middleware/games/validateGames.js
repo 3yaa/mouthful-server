@@ -1,8 +1,7 @@
 const MAX_NOTE_LENGTH = 1000;
 const VALID_STATUSES = ["Playing", "Completed", "Dropped"];
 
-// cover is a jsonb { url, color } -- color is optional so a poster can be saved
-// before its palette has been read off the image
+// cover is a jsonb { url, color }
 const isInvalidCover = (cover) =>
 	typeof cover !== "object" ||
 	Array.isArray(cover) ||
@@ -11,6 +10,10 @@ const isInvalidCover = (cover) =>
 	(cover.color !== undefined &&
 		cover.color !== null &&
 		typeof cover.color !== "string");
+
+// whole minutes
+const isInvalidMinutes = (minutes) =>
+	!Number.isInteger(minutes) || minutes <= 0 || minutes > 1_000_000;
 
 export const validateGameId = (req, res, next) => {
 	const gameId = req.params.id;
@@ -141,6 +144,7 @@ export const validateGameRefresh = (req, res, next) => {
 		"logoUrl",
 		"dlcs",
 		"dlcIndex",
+		"timeToBeat",
 	];
 	// check if exists
 	if (!updates || Object.keys(updates).length === 0) {
@@ -169,12 +173,20 @@ export const validateGameRefresh = (req, res, next) => {
 			});
 		}
 	}
+	// time to beat
+	if (updates.timeToBeat != null && isInvalidMinutes(updates.timeToBeat)) {
+		return res.status(400).json({
+			success: false,
+			message:
+				"Invalid timeToBeat field provided (must be minutes or null)",
+		});
+	}
 
 	next();
 };
 
 export const validateGameCreate = (req, res, next) => {
-	const { title, dateReleased, status, igdbId, cover } = req.body;
+	const { title, dateReleased, status, igdbId, cover, timeToBeat } = req.body;
 	// REQUIRED FIELDS
 	// title
 	if (!title || title.trim() === "") {
@@ -228,6 +240,14 @@ export const validateGameCreate = (req, res, next) => {
 					"Invalid cover field provided (must be { url, color } or null)",
 			});
 		}
+	}
+	// time to beat
+	if (timeToBeat != null && isInvalidMinutes(timeToBeat)) {
+		return res.status(400).json({
+			success: false,
+			message:
+				"Invalid timeToBeat field provided (must be minutes or null)",
+		});
 	}
 
 	next();

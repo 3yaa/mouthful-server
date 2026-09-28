@@ -1,4 +1,8 @@
-import { getTmdbId, getTmdbShowEnrichment } from "./tmdbCalls/tmdbAPI.js";
+import {
+	addSeasonRuntimes,
+	getTmdbId,
+	getTmdbShowEnrichment,
+} from "./tmdbCalls/tmdbAPI.js";
 import {
 	applyAnime,
 	cutIdsFromQuery,
@@ -32,7 +36,11 @@ export async function useShowAPI(req, res) {
 		const pending = searchSaysAnime
 			? startAnimeChain(detected.tmdbId, [], false)
 			: null;
-		const enriched = await getTmdbShowEnrichment(detected.tmdbId);
+		// only a live-action show carries seasons
+		const enriched = await getTmdbShowEnrichment(
+			detected.tmdbId,
+			!searchSaysAnime,
+		);
 		await applyAnime(
 			enriched.processedShow,
 			detected.tmdbId,
@@ -41,6 +49,11 @@ export async function useShowAPI(req, res) {
 			[],
 			false,
 			pending,
+		);
+		await addSeasonRuntimes(
+			enriched.processedShow,
+			detected.tmdbId,
+			enriched.runtimes,
 		);
 		res.json({
 			success: true,
@@ -68,7 +81,7 @@ export async function useShowRefreshAPI(req, res) {
 		const pending = runAnime(req.query.forceAnime, Boolean(storedAnime))
 			? startAnimeChain(tmdbId, preferredCuts, refresh)
 			: null;
-		const enriched = await getTmdbShowEnrichment(tmdbId);
+		const enriched = await getTmdbShowEnrichment(tmdbId, !pending);
 		await applyAnime(
 			enriched.processedShow,
 			tmdbId,
@@ -77,6 +90,11 @@ export async function useShowRefreshAPI(req, res) {
 			preferredCuts,
 			refresh,
 			pending,
+		);
+		await addSeasonRuntimes(
+			enriched.processedShow,
+			tmdbId,
+			enriched.runtimes,
 		);
 		//
 		res.json({

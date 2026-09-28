@@ -1,6 +1,7 @@
 import { makeIgdbRequestWithRety } from "./igdbInternal/igdbAPI.js";
 import { checkDuplicate } from "../utils/checkDuplicate.js";
 import { getSteamGridLogos } from "../utils/steamGridLogo.js";
+import { getTimesToBeat } from "./igdbInternal/timeToBeat.js";
 
 // mod, season, pack, update, and editions
 const SKIPPED_GAME_TYPES = [5, 7, 13, 14].join(",");
@@ -47,6 +48,7 @@ export async function useIgdbForGameAPI(req, res) {
 				(normalizeName(b.name) === wanted) -
 				(normalizeName(a.name) === wanted),
 		);
+		const times = await getTimesToBeat(games.map((game) => game.id));
 		const processedGames = games.map((game) => {
 			return {
 				igdbId: game.id,
@@ -64,6 +66,7 @@ export async function useIgdbForGameAPI(req, res) {
 				screenshot_urls: (game.screenshots || []).map((ss) => ({
 					ss_url: `https://images.igdb.com/igdb/image/upload/t_1080p/${ss.image_id}.jpg`,
 				})),
+				time_to_beat: times[game.id] ?? null,
 				logo_url: null,
 				logos: [],
 			};
