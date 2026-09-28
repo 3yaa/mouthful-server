@@ -156,6 +156,13 @@ async function withSeries(book) {
 				editions(limit: 50, order_by: { users_count: desc }) {
 					cached_image
 				}
+				audiobook: editions(
+					where: { audio_seconds: { _gt: 0 } }
+					order_by: { users_count: desc }
+					limit: 1
+				) {
+					audio_seconds
+				}
 			}
 		}`,
 		{ id: Number(book.id) },
@@ -198,8 +205,19 @@ async function withSeries(book) {
 		subtitle: b.subtitle ?? null,
 		series,
 		covers,
+		audioSeconds: b.audiobook?.[0]?.audio_seconds ?? null,
 	};
 }
+
+// audiobook pace
+const MINUTES_PER_PAGE = 2;
+
+const timeSpentOf = (book) =>
+	book.audioSeconds
+		? Math.round(book.audioSeconds / 60)
+		: book.pages
+			? book.pages * MINUTES_PER_PAGE
+			: null;
 
 // 3rd call -- series details
 
@@ -391,7 +409,7 @@ async function assembleBook(book) {
 		subtitle: fullBook.subtitle,
 		author_name: fullBook.authors,
 		first_publish_year: fullBook.first_publish_year,
-		num_pages: fullBook.pages,
+		time_spent: timeSpentOf(fullBook),
 		rating: fullBook.rating,
 		covers: fullBook.covers.map((c) => ({
 			url: c.url,

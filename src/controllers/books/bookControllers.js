@@ -5,7 +5,7 @@ const convertBookToCamelCase = (book) => ({
 	title: book.title,
 	author: book.author,
 	cover: book.cover ?? null,
-	numPages: book.num_pages,
+	timeSpent: book.time_spent ?? null,
 	rating: book.rating,
 	datePublished: book.date_published,
 	series: book.series ?? null,
@@ -125,7 +125,7 @@ const COLUMNS = {
 	title: "title",
 	author: "author",
 	cover: "cover",
-	numPages: "num_pages",
+	timeSpent: "time_spent",
 	rating: "rating",
 	datePublished: "date_published",
 	series: "series",
@@ -222,7 +222,7 @@ export const createBook = async (req, res) => {
 			dateCompleted,
 			note,
 			key,
-			numPages,
+			timeSpent,
 			rating,
 		} = req.body;
 
@@ -239,7 +239,7 @@ export const createBook = async (req, res) => {
       date_completed,
       note,
       key,
-      num_pages,
+      time_spent,
       rating,
       user_id
     ) VALUES (
@@ -258,7 +258,7 @@ export const createBook = async (req, res) => {
 			dateCompleted,
 			note,
 			key,
-			numPages,
+			timeSpent ?? null,
 			rating,
 			userId,
 		];

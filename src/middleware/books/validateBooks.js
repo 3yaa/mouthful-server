@@ -1,6 +1,10 @@
 const MAX_NOTE_LENGTH = 1000;
 const VALID_STATUSES = ["Reading", "Want to Read", "Completed", "Dropped"];
 
+// whole minutes -- null clears it
+const isInvalidMinutes = (minutes) =>
+	!Number.isInteger(minutes) || minutes <= 0 || minutes > 1_000_000;
+
 export const validateBookId = (req, res, next) => {
 	const bookId = req.params.id;
 
@@ -140,7 +144,7 @@ export const validateBookRefresh = (req, res, next) => {
 	const allowedFields = [
 		"indirectUpdate",
 		"cover",
-		"numPages",
+		"timeSpent",
 		"rating",
 		"series",
 		"title",
@@ -165,12 +169,19 @@ export const validateBookRefresh = (req, res, next) => {
 			message: "Invalid refresh field provided",
 		});
 	}
+	if (updates.timeSpent != null && isInvalidMinutes(updates.timeSpent)) {
+		return res.status(400).json({
+			success: false,
+			message:
+				"Invalid timeSpent field provided (must be minutes or null)",
+		});
+	}
 
 	next();
 };
 
 export const validateBookCreate = (req, res, next) => {
-	const { title, datePublished, status, key, cover, numPages, rating } =
+	const { title, datePublished, status, key, cover, timeSpent, rating } =
 		req.body;
 	// REQUIRED FIELDS
 	// title
@@ -234,15 +245,13 @@ export const validateBookCreate = (req, res, next) => {
 			});
 		}
 	}
-	// numPages
-	if (numPages !== undefined && numPages !== null) {
-		if (!Number.isInteger(numPages) || numPages < 0 || numPages > 32767) {
-			return res.status(400).json({
-				success: false,
-				message:
-					"Invalid numPages field provided (must be a non-negative integer)",
-			});
-		}
+	// time spent
+	if (timeSpent != null && isInvalidMinutes(timeSpent)) {
+		return res.status(400).json({
+			success: false,
+			message:
+				"Invalid timeSpent field provided (must be minutes or null)",
+		});
 	}
 	// rating
 	if (rating !== undefined && rating !== null) {
