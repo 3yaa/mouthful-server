@@ -21,6 +21,7 @@ const convertMovieToCamelCase = (movie) => ({
 	backdropUrl: movie.backdrop_url,
 	logoUrl: movie.logo_url,
 	dateReleased: movie.date_released,
+	genres: movie.genres ?? null,
 	series: movie.series ?? null,
 	status: movie.status,
 	score:
@@ -153,6 +154,7 @@ const COLUMNS = {
 	backdropUrl: "backdrop_url",
 	logoUrl: "logo_url",
 	dateReleased: "date_released",
+	genres: "genres",
 	series: "series",
 	status: "status",
 	score_mu: "score_mu",
@@ -250,6 +252,7 @@ export const createMovie = async (req, res) => {
 			backdropUrl,
 			logoUrl,
 			dateReleased,
+			genres,
 			series,
 			status,
 			score: scoreObj,
@@ -267,6 +270,7 @@ export const createMovie = async (req, res) => {
       backdrop_url,
       logo_url,
       date_released,
+      genres,
       series,
       status,
       score_mu,
@@ -277,7 +281,7 @@ export const createMovie = async (req, res) => {
       tmdb_id,
       user_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
     ) RETURNING *
   `;
 		const values = [
@@ -287,6 +291,7 @@ export const createMovie = async (req, res) => {
 			backdropUrl,
 			logoUrl ?? null,
 			dateReleased,
+			genres ?? null,
 			series ?? null,
 			status,
 			scoreObj?.mu ?? null,

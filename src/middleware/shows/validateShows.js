@@ -99,7 +99,7 @@ export const validateShowPatch = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message:
-				"Invalid status field provided ('Watching' | 'On Hold' | 'Want to Watch' | 'Completed' | 'Dropped')",
+				"Invalid status field provided ('Watching' | 'Want to Watch' | 'Completed' | 'On Hold' | 'Dropped')",
 		});
 	}
 	// check if exists
@@ -240,7 +240,7 @@ export const validateShowCreate = (req, res, next) => {
 			return res.status(400).json({
 				success: false,
 				message:
-					"Invalid status provided ('Watching' | 'On Hold' | 'Want to Watch' | 'Completed' | 'Dropped')",
+					"Invalid status provided ('Watching' | 'Want to Watch' | 'Completed' | 'On Hold' | 'Dropped')",
 			});
 		}
 	}

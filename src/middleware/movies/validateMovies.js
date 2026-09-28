@@ -12,6 +12,11 @@ const isInvalidCover = (cover) =>
 		cover.color !== null &&
 		typeof cover.color !== "string");
 
+const isInvalidGenres = (genres) =>
+	!Array.isArray(genres) ||
+	genres.length > 20 ||
+	genres.some((g) => typeof g !== "string" || !g || g.length > 50);
+
 export const validateMovieId = (req, res, next) => {
 	const movieId = req.params.id;
 
@@ -146,6 +151,7 @@ export const validateMovieRefresh = (req, res, next) => {
 		"tmdbId",
 		"director",
 		"dateReleased",
+		"genres",
 		"title",
 	];
 	// check if exists
@@ -175,12 +181,23 @@ export const validateMovieRefresh = (req, res, next) => {
 			});
 		}
 	}
+	// genres
+	if (updates.genres !== undefined && updates.genres !== null) {
+		if (isInvalidGenres(updates.genres)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid genres field provided (must be string[] or null)",
+			});
+		}
+	}
 
 	next();
 };
 
 export const validateMovieCreate = (req, res, next) => {
-	const { title, dateReleased, status, imdbId, tmdbId, cover } = req.body;
+	const { title, dateReleased, status, imdbId, tmdbId, cover, genres } =
+		req.body;
 	// REQUIRED FIELDS
 	// title
 	if (!title || title.trim() === "") {
@@ -239,6 +256,16 @@ export const validateMovieCreate = (req, res, next) => {
 				success: false,
 				message:
 					"Invalid cover field provided (must be { url, color } or null)",
+			});
+		}
+	}
+	// genres
+	if (genres !== undefined && genres !== null) {
+		if (isInvalidGenres(genres)) {
+			return res.status(400).json({
+				success: false,
+				message:
+					"Invalid genres field provided (must be string[] or null)",
 			});
 		}
 	}

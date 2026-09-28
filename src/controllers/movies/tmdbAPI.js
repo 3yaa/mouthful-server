@@ -54,6 +54,9 @@ const getDirector = (credits) =>
 		.map((member) => member.name)
 		.join(", ") || null;
 
+// tmdb lists the main genres first
+const getGenres = (details) => (details.genres ?? []).map((g) => g.name);
+
 const getReleaseYear = (releaseDate) => {
 	const year = parseInt(releaseDate?.slice(0, 4));
 	return isNaN(year) ? null : year;
@@ -201,6 +204,7 @@ export async function useMovieTmdbAPI(req, res) {
 				title: movieTitle,
 				director: getDirector(details.credits),
 				released_date: releasedYear,
+				genres: getGenres(details),
 				imdbRating: ratings[imdbId]?.rating ?? null,
 				poster_url: posters[0] ?? null,
 				backdrop_url: backdrops[0] ?? null,
@@ -249,6 +253,7 @@ export async function useMovieTmdbRefreshAPI(req, res) {
 				title: details.title,
 				director: getDirector(details.credits),
 				released_date: getReleaseYear(details.release_date),
+				genres: getGenres(details),
 				imdbRating: imdbId ? (ratings[imdbId]?.rating ?? null) : null,
 				poster_url: posters[0] ?? null,
 				backdrop_url: backdrops[0] ?? null,
