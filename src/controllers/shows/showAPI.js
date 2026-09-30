@@ -4,12 +4,11 @@ import {
 	getTmdbShowEnrichment,
 } from "./tmdbCalls/tmdbAPI.js";
 import {
-	applyAnime,
 	cutIdsFromQuery,
 	storedAnimeState,
 } from "./anime/utils/utilFunctions.js";
 import { runAnime } from "./anime/utils/isAnimeCheck.js";
-import { startAnimeChain } from "./anime/animeAPI.js";
+import { applyChain, startAnimeChain } from "./anime/animeAPI.js";
 
 const sendError = (res, error) => {
 	console.error("Show fetch failed: ", error);
@@ -33,23 +32,18 @@ export async function useShowAPI(req, res) {
 			req.query.forceAnime,
 		);
 		// run anime chain concurrently
-		const pending = searchSaysAnime
-			? startAnimeChain(detected.tmdbId, [], false)
-			: null;
+		const early = searchSaysAnime ? startAnimeChain(detected.tmdbId) : null;
 		// only a live-action show carries seasons
 		const enriched = await getTmdbShowEnrichment(
 			detected.tmdbId,
 			!searchSaysAnime,
 		);
-		await applyAnime(
-			enriched.processedShow,
-			detected.tmdbId,
-			req.query.forceAnime,
-			enriched.wantAnime,
-			[],
-			false,
-			pending,
-		);
+		if (runAnime(req.query.forceAnime, enriched.wantAnime)) {
+			applyChain(
+				enriched.processedShow,
+				await (early ?? startAnimeChain(detected.tmdbId)),
+			);
+		}
 		await addSeasonRuntimes(
 			enriched.processedShow,
 			detected.tmdbId,
@@ -78,19 +72,16 @@ export async function useShowRefreshAPI(req, res) {
 			: (storedAnime?.cuts ?? []);
 		const refresh = req.query.refresh === "1";
 		//
-		const pending = runAnime(req.query.forceAnime, Boolean(storedAnime))
-			? startAnimeChain(tmdbId, preferredCuts, refresh)
+		const chain = () => startAnimeChain(tmdbId, preferredCuts, refresh);
+		const early = runAnime(req.query.forceAnime, Boolean(storedAnime))
+			? chain()
 			: null;
-		const enriched = await getTmdbShowEnrichment(tmdbId, !pending);
-		await applyAnime(
-			enriched.processedShow,
-			tmdbId,
-			req.query.forceAnime,
-			enriched.wantAnime || Boolean(storedAnime),
-			preferredCuts,
-			refresh,
-			pending,
-		);
+		const enriched = await getTmdbShowEnrichment(tmdbId, !early);
+		if (
+			runAnime(req.query.forceAnime, enriched.wantAnime || Boolean(storedAnime))
+		) {
+			applyChain(enriched.processedShow, await (early ?? chain()));
+		}
 		await addSeasonRuntimes(
 			enriched.processedShow,
 			tmdbId,

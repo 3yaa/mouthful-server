@@ -7,142 +7,88 @@ const LEAD_FORMAT_PRIORITY = new Map([
 	["OVA", 3],
 	["MOVIE", 4],
 ]);
+const leadRank = (anime) => LEAD_FORMAT_PRIORITY.get(anime?.format) ?? Infinity;
 
-function relateAltCuts(mainlineIds, enrichedNodes) {
-	const alts = new Map();
-	for (const id of mainlineIds) {
-		alts.set(id, new Set());
-	}
-	//
-	for (const id of mainlineIds) {
+// spine entries joined by ALTERNATIVE edges between cuts of one production
+function cutGroups(ids, enrichedNodes) {
+	const cuts = new Map(ids.map((id) => [id, new Set()]));
+	for (const id of ids) {
 		const anime = enrichedNodes.get(id);
 		for (const edge of animeEdges(anime)) {
-			if (edge.relationType !== "ALTERNATIVE") continue;
 			const otherId = edge.node.id;
-			// only looking at spine items
-			if (!mainlineIds.has(otherId)) continue;
+			if (edge.relationType !== "ALTERNATIVE" || !cuts.has(otherId))
+				continue;
 			// ALTERNATIVE also links a remake to its original
 			if (sameProduction(anime, enrichedNodes.get(otherId)) !== true)
 				continue;
-			// do both if if one side is missing its fills
-			alts.get(id).add(otherId);
-			alts.get(otherId).add(id);
+			cuts.get(id).add(otherId);
+			cuts.get(otherId).add(id);
 		}
 	}
-	return alts;
-}
 
-function animesAltCuts(mainlineIds, enrichedNodes) {
-	const alts = relateAltCuts(mainlineIds, enrichedNodes);
-	// singleton is just by itself
-	const animesCuts = [];
-	const visited = new Set();
-
-	for (const startId of alts.keys()) {
-		if (visited.has(startId)) continue;
-		//
-		const animeCuts = [];
-		const queue = [startId];
-		visited.add(startId);
-
-		// traverse all alts
-		for (let i = 0; i < queue.length; i++) {
-			const currentId = queue[i];
-			animeCuts.push(currentId);
-
-			for (const neighborId of alts.get(currentId) ?? []) {
-				if (visited.has(neighborId)) continue;
-				visited.add(neighborId);
-				queue.push(neighborId);
+	const groups = [];
+	const seen = new Set();
+	for (const startId of cuts.keys()) {
+		if (seen.has(startId)) continue;
+		seen.add(startId);
+		const group = [startId];
+		for (let at = 0; at < group.length; at++) {
+			for (const otherId of cuts.get(group[at])) {
+				if (seen.has(otherId)) continue;
+				seen.add(otherId);
+				group.push(otherId);
 			}
 		}
-		animesCuts.push(animeCuts);
+		groups.push(group);
 	}
-	return animesCuts;
+	return groups;
 }
 
-function pickDefaultCuts(
-	mainlineIds,
-	enrichedNodes,
-	rootAnilistId,
-	preferredCuts = new Set(),
-) {
-	const altCutsAnimes = animesAltCuts(mainlineIds, enrichedNodes);
-	const leadById = new Map();
-
-	for (const altCutsAnime of altCutsAnimes) {
-		const picked = altCutsAnime.find((id) => preferredCuts.has(id));
-		let leadId =
-			picked ??
-			(altCutsAnime.includes(rootAnilistId)
-				? rootAnilistId
-				: altCutsAnime[0]);
-		// user choice wins, including the root cut.
-		if (picked == null && leadId !== rootAnilistId) {
-			for (let i = 1; i < altCutsAnime.length; i++) {
-				const candidateId = altCutsAnime[i];
-				const lead = enrichedNodes.get(leadId);
-				const candidate = enrichedNodes.get(candidateId);
-				const leadRank =
-					LEAD_FORMAT_PRIORITY.get(lead?.format) ?? Infinity;
-				const candidateRank =
-					LEAD_FORMAT_PRIORITY.get(candidate?.format) ?? Infinity;
-				//
-				if (
-					candidateRank < leadRank ||
-					(candidateRank === leadRank && candidateId < leadId)
-				) {
-					leadId = candidateId;
-				}
-			}
-		}
-		// singleton maps to themselves
-		for (const id of altCutsAnime) leadById.set(id, leadId);
-	}
-	return leadById;
+// the user's pick, then the root, then the broadcast cut
+function pickLead(group, enrichedNodes, rootId, preferredCuts) {
+	const picked = group.find((id) => preferredCuts.has(id));
+	if (picked != null) return picked;
+	if (group.includes(rootId)) return rootId;
+	return group.reduce((leadId, id) => {
+		const rank = leadRank(enrichedNodes.get(id));
+		const leadRankNow = leadRank(enrichedNodes.get(leadId));
+		return rank < leadRankNow || (rank === leadRankNow && id < leadId)
+			? id
+			: leadId;
+	});
 }
 
+// one slot per production -- the other cuts ride on it as variants
 export function collapseAltCuts(
 	mainline,
-	mainlineIds,
 	enrichedNodes,
-	rootAnilistId,
+	rootId,
 	preferredCuts = [],
 ) {
-	const collapsed = [];
-	const franchiseById = new Map();
-	const leadById = pickDefaultCuts(
-		mainlineIds,
-		enrichedNodes,
-		rootAnilistId,
-		new Set(preferredCuts),
-	);
+	const preferred = new Set(preferredCuts);
 	const shapedById = new Map(
 		mainline.map((anime) => [anime.anilistId, anime]),
 	);
+	const leadById = new Map();
+	for (const group of cutGroups([...shapedById.keys()], enrichedNodes)) {
+		const leadId = pickLead(group, enrichedNodes, rootId, preferred);
+		for (const id of group) leadById.set(id, shapedById.get(leadId));
+	}
 
-	// walk all mainline entry
+	const collapsed = [];
 	for (const anime of mainline) {
-		const leadId = leadById.get(anime.anilistId) ?? anime.anilistId;
-		const lead = shapedById.get(leadId);
-		if (!lead) continue;
-		// lead id and variant ids resolve to lead obj
-		franchiseById.set(anime.anilistId, lead);
-		// remove the alternative from mainline nodes
-		if (anime.anilistId === leadId) {
+		const lead = leadById.get(anime.anilistId);
+		if (anime === lead) {
 			collapsed.push(lead);
 			continue;
 		}
-		// remove mainline-only child conatiners varient
-		const { subNodes, variants, ...variantMedia } = anime;
+		const { subNodes, variants, ...cut } = anime;
 		lead.variants.push({
-			...variantMedia,
+			...cut,
 			isMainLine: false,
 			variantKind: "alternate_cut",
 		});
 	}
-	return {
-		collapsed,
-		franchiseById,
-	};
+	// every cut's id resolves to the slot that carries it
+	return { collapsed, franchiseById: leadById };
 }

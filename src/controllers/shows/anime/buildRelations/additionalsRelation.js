@@ -7,8 +7,6 @@ import {
 } from "./classifyNodes.js";
 import { noteDrop } from "../utils/shapeAnimes.js";
 
-const rankMap = (types) => new Map(types.map((type, rank) => [type, rank]));
-
 // flip the parent's label so the whole index reads from the additional's side
 const INVERSE_RELATION = new Map([
 	["PREQUEL", "SEQUEL"],
@@ -21,127 +19,104 @@ const INVERSE_RELATION = new Map([
 const inverseOf = (relationType) =>
 	INVERSE_RELATION.get(relationType) ?? relationType;
 
-// a shorter cut of whatever it points at
 const RECUT_RELATIONS = new Set(["SUMMARY", "ALTERNATIVE"]);
-
-// what a spin-off says about the chain -- a continuation says PREQUEL or SEQUEL
 const OWN_SERIES_ANCHORS = new Set(["PARENT", "SIDE_STORY"]);
-
-// relations that never place an entry on the chain.
 const NOISE_RELATIONS = new Set(["CHARACTER", "OTHER"]);
+const ANCHOR_RANK = new Map(
+	[
+		"PARENT",
+		"PREQUEL",
+		"ALTERNATIVE",
+		"SUMMARY",
+		"SEQUEL",
+		"SIDE_STORY",
+		"CONTAINS",
+		"COMPILATION",
+	].map((type, rank) => [type, rank]),
+);
 
-// what the parent is to the additional, best host first -- unlisted sorts last
-const ANCHOR_RANK = rankMap([
-	"PARENT",
-	"PREQUEL",
-	"ALTERNATIVE",
-	"SUMMARY",
-	"SEQUEL",
-	"SIDE_STORY",
-	"CONTAINS",
-	"COMPILATION",
-]);
-
-export function buildRelationIndex(mainlineIds, additionalIds, enrichedNodes) {
-	const index = new Map();
-	const add = (additionalId, relationType, parentId) => {
-		const relation = { relationType, parentId };
-		// another relation
-		const bucket = index.get(additionalId);
-		if (bucket) bucket.push(relation);
-		// first relation
-		else index.set(additionalId, [relation]);
-	};
-
-	// read both directions
-	for (const parentId of mainlineIds) {
+// every relation between an additional and the spine, read from the additional's side
+function relationIndexOf(additionalAnime, spineIds, enrichedNodes) {
+	const index = new Map(
+		additionalAnime.map((anime) => [anime.anilistId, []]),
+	);
+	// both directions -- anilist does not always record both ends
+	for (const parentId of spineIds) {
 		for (const edge of animeEdges(enrichedNodes.get(parentId))) {
-			if (additionalIds.has(edge.node.id)) {
-				add(edge.node.id, inverseOf(edge.relationType), parentId);
-			}
+			index.get(edge.node.id)?.push({
+				relationType: inverseOf(edge.relationType),
+				parentId,
+			});
 		}
 	}
-	for (const additionalId of additionalIds) {
+	for (const [additionalId, relations] of index) {
 		for (const edge of animeEdges(enrichedNodes.get(additionalId))) {
-			if (mainlineIds.has(edge.node.id)) {
-				add(additionalId, edge.relationType, edge.node.id);
-			}
+			if (spineIds.has(edge.node.id))
+				relations.push({
+					relationType: edge.relationType,
+					parentId: edge.node.id,
+				});
 		}
 	}
-
 	return index;
 }
 
-// lowest rank wins, first seen breaks a tie
-function pickByRank(relations, ranks, unranked) {
+// best host by ANCHOR_RANK, first seen breaks a tie -- null when nothing but noise
+function pickAnchor(relations) {
 	let picked = null;
 	let best = Infinity;
-
 	for (const relation of relations) {
-		const rank = ranks.get(relation.relationType) ?? unranked;
+		if (NOISE_RELATIONS.has(relation.relationType)) continue;
+		const rank = ANCHOR_RANK.get(relation.relationType) ?? ANCHOR_RANK.size;
 		if (rank < best) {
 			best = rank;
 			picked = relation;
 		}
 	}
-
 	return picked;
 }
 
 // SUMMARY is a recap outright -- ALTERNATIVE only when the cut is a feature
-function findRecut(additional, relations, enrichedNodes) {
-	const node = enrichedNodes?.get(additional.anilistId);
-
-	return (
-		relations.find((relation) => {
-			if (!RECUT_RELATIONS.has(relation.relationType)) return false;
-			if (relation.relationType === "ALTERNATIVE" && !isFeature(node))
-				return false;
-			return isRecapOf(node, enrichedNodes?.get(relation.parentId));
-		}) ?? null
-	);
+function isRecut(additional, relations, enrichedNodes) {
+	const node = enrichedNodes.get(additional.anilistId);
+	return relations.some((relation) => {
+		if (!RECUT_RELATIONS.has(relation.relationType)) return false;
+		if (relation.relationType === "ALTERNATIVE" && !isFeature(node))
+			return false;
+		return isRecapOf(node, enrichedNodes.get(relation.parentId));
+	});
 }
 
 export function relateAdditional(
 	additionalAnime,
-	relationIndex,
+	spineIds,
 	mainlineById,
 	mainlineNodes,
 	enrichedNodes,
-	dropped = [],
+	dropped,
 ) {
+	const relationIndex = relationIndexOf(
+		additionalAnime,
+		spineIds,
+		enrichedNodes,
+	);
 	for (const additional of additionalAnime) {
-		const relations = relationIndex.get(additional.anilistId) ?? [];
-
-		// for cases like jjk execuation -- recap + early screening
-		if (findRecut(additional, relations, enrichedNodes)) {
+		const relations = relationIndex.get(additional.anilistId);
+		const anchor = pickAnchor(relations);
+		// a recap or nothing but noise
+		if (
+			isRecut(additional, relations, enrichedNodes) ||
+			(!anchor && relations.length > 0)
+		) {
 			noteDrop(dropped, additional.anilistId);
 			continue;
 		}
-
-		const anchor = pickByRank(
-			relations.filter(
-				(relation) => !NOISE_RELATIONS.has(relation.relationType),
-			),
-			ANCHOR_RANK,
-			ANCHOR_RANK.size,
-		);
-		// nothing but noise
-		if (!anchor && relations.length) {
-			noteDrop(dropped, additional.anilistId);
-			continue;
-		}
-
-		const relationType = anchor?.relationType ?? null;
-		// remove alternatives
+		// a spin-off series is its own show
 		if (
 			additional.format === "TV" &&
-			OWN_SERIES_ANCHORS.has(relationType)
-		) {
+			OWN_SERIES_ANCHORS.has(anchor?.relationType)
+		)
 			continue;
-		}
-
-		// remove trash
 		if (
 			additional.kind === "sideStory" &&
 			additional.duration &&
@@ -150,16 +125,10 @@ export function relateAdditional(
 			noteDrop(dropped, additional.anilistId);
 			continue;
 		}
-
-		// pick what the parent node is
+		// no edge names a slot
 		const parent =
 			mainlineById.get(anchor?.parentId) ??
 			findDateParent(mainlineNodes, additional);
-		// no slot to hang from
-		if (!parent) {
-			continue;
-		}
-
-		parent.subNodes.push({ ...additional });
+		parent?.subNodes.push(additional);
 	}
 }

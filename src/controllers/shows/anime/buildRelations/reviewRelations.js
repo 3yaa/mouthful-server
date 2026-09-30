@@ -1,4 +1,4 @@
-import { animeEdges } from "./classifyNodes.js";
+import { animeEdges, SPINE_RELATIONS } from "./classifyNodes.js";
 
 // SPIN_OFF, CHARACTER, OTHER and ADAPTATION not counted
 const CONFIRM_RELATIONS = new Set([
@@ -11,8 +11,6 @@ const CONFIRM_RELATIONS = new Set([
 	"COMPILATION",
 	"CONTAINS",
 ]);
-
-const SPINE_RELATIONS = new Set(["PREQUEL", "SEQUEL"]);
 
 // spine as anilist draws it
 export function walkSpine(candidates, enrichedNodes, rootId) {
@@ -49,38 +47,25 @@ export function walkSpine(candidates, enrichedNodes, rootId) {
 }
 
 // anilist backcheck shikimori
-export function reviewCandidates(candidates, enrichedNodes, spine) {
-	const confirmed = new Set(spine);
-	const rejected = new Set();
-
-	// everything the spine vouches for, collected in one pass
-	const vouchedBySpine = new Set();
+export function confirmBySpine(candidates, enrichedNodes, spine) {
+	const vouched = new Set();
 	for (const spineId of spine) {
 		for (const edge of animeEdges(enrichedNodes.get(spineId))) {
 			if (CONFIRM_RELATIONS.has(edge.relationType))
-				vouchedBySpine.add(edge.node.id);
+				vouched.add(edge.node.id);
 		}
 	}
-
-	for (const anilistId of candidates) {
-		if (confirmed.has(anilistId)) continue;
+	const tied = (anilistId) => {
 		const node = enrichedNodes.get(anilistId);
-		if (!node) {
-			rejected.add(anilistId);
-			continue;
-		}
-		// spine wins
-		const fromNode = animeEdges(node).some(
+		if (!node) return false;
+		if (vouched.has(anilistId)) return true;
+		return animeEdges(node).some(
 			(edge) =>
 				spine.has(edge.node.id) &&
 				CONFIRM_RELATIONS.has(edge.relationType),
 		);
-
-		if (vouchedBySpine.has(anilistId) || fromNode) confirmed.add(anilistId);
-		else rejected.add(anilistId);
-	}
-
-	return { confirmed, rejected };
+	};
+	return new Set([...spine, ...[...candidates].filter(tied)]);
 }
 
 export function unlistedKin(candidates, enrichedNodes, byAnilist) {

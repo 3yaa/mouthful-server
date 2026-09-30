@@ -20,11 +20,7 @@ export function getMangaAdaptation(anime) {
 
 	return {
 		anilistId: edge.node.id,
-		title:
-			edge.node.title?.english ??
-			edge.node.title?.romaji ??
-			edge.node.title?.native ??
-			null,
+		title: animeTitle(edge.node),
 		format: edge.node.format ?? "MANGA",
 	};
 }

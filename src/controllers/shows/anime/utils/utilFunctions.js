@@ -1,6 +1,4 @@
 import { pool } from "../../../../config/db.js";
-import { runAnime } from "./isAnimeCheck.js";
-import { applyChain, startAnimeChain } from "../animeAPI.js";
 import { getFribbMap, rowsFor } from "../externalCalls/fribbMap.js";
 
 export function pickRoot(rows) {
@@ -102,25 +100,4 @@ export async function storedAnimeState(userId, tmdbId) {
 	);
 	if (!rows.length) return null;
 	return { cuts: activeAnimeCutIds(rows[0].seasons) };
-}
-
-export async function applyAnime(
-	processedShow,
-	tmdbId,
-	forceAnime,
-	detected,
-	cuts,
-	refresh,
-	pending,
-) {
-	if (!runAnime(forceAnime, detected)) return;
-	try {
-		const chain = pending
-			? await pending
-			: await startAnimeChain(tmdbId, cuts, refresh);
-		applyChain(processedShow, chain);
-	} catch (error) {
-		// anime enrichment is non-blocking; TMDB still gives a usable row.
-		console.error("Anime chain failed: ", error.message);
-	}
 }
