@@ -108,29 +108,42 @@ function shapeWork(anime, fribb, isMovie) {
 	};
 }
 
+// pages are cached apart
+const uniqueById = (works) => {
+	const seen = new Set();
+	return works.filter((anime) => !seen.has(anime.id) && seen.add(anime.id));
+};
+
 async function worksFor({ tab, season, year }) {
 	const { start, end, startFuzzy } = seasonBounds(season, year);
 	const ttl = end < new Date() ? SETTLED_TTL : LIVE_TTL;
 	if (tab === "movies") {
-		return fetchSeasonWorks(
-			{ season, seasonYear: year, formats: ["MOVIE"] },
-			ttl,
+		return uniqueById(
+			await fetchSeasonWorks(
+				{ season, seasonYear: year, formats: ["MOVIE"] },
+				ttl,
+			),
 		);
 	}
 	if (tab === "new") {
-		return fetchSeasonWorks(
-			{ season, seasonYear: year, formats: SERIES },
-			ttl,
+		return uniqueById(
+			await fetchSeasonWorks(
+				{ season, seasonYear: year, formats: SERIES },
+				ttl,
+			),
 		);
 	}
+	// an unknown day is 00 -- the bounds sit either side of YYYYMM00
+	const before = startFuzzy - 1;
+	const after = startFuzzy - 2;
 	// ended inside the season, or still going now
 	const [ended, airing] = await Promise.all([
 		fetchSeasonWorks(
-			{ formats: SERIES, startBefore: startFuzzy, endAfter: startFuzzy },
+			{ formats: SERIES, startBefore: before, endAfter: after },
 			ttl,
 		),
 		fetchSeasonWorks(
-			{ formats: SERIES, startBefore: startFuzzy, status: "RELEASING" },
+			{ formats: SERIES, startBefore: before, status: "RELEASING" },
 			ttl,
 		),
 	]);

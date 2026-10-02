@@ -11,6 +11,8 @@ const MAX_429_RETRIES = 3;
 // oldest first
 const recent = [];
 const cache = new Map();
+// the same request asked twice at once rides one call
+const inflight = new Map();
 //
 let queue = Promise.resolve();
 //
@@ -78,7 +80,14 @@ export async function anilistRequest(
 		if (hit && hit.expires > Date.now()) return hit.value;
 	}
 
-	const value = await anilistCall(query, variables);
+	let call = inflight.get(key);
+	if (!call) {
+		call = anilistCall(query, variables).finally(() =>
+			inflight.delete(key),
+		);
+		inflight.set(key, call);
+	}
+	const value = await call;
 	cache.set(key, { value, expires: Date.now() + ttl });
 
 	// prune cache
