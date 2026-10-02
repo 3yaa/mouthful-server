@@ -32,12 +32,18 @@ export const validateTMDBIdAPI = (req, res, next) => {
 };
 
 export const validateShowsDiscoverAPI = (req, res, next) => {
-	const { year, month, page } = req.query;
+	const { year, month, page, origin } = req.query;
 
 	if (!year || !month || !page) {
 		return res.status(400).json({
 			success: false,
 			message: "year, month, and page are required",
+		});
+	}
+	if (origin && origin !== "drama" && origin !== "rest") {
+		return res.status(400).json({
+			success: false,
+			message: "origin must be drama or rest",
 		});
 	}
 	next();

@@ -4,19 +4,42 @@ import { httpFetch } from "../../utils/httpFetch.js";
 
 dotenv.config();
 
-function buildMonthUrl(year, month, countryOrigin) {
+const DRAMA = ["KR", "CN"];
+
+let restCountries = null;
+function getRestCountries() {
+	restCountries ??= httpFetch(
+		`https://api.themoviedb.org/3/configuration/countries?api_key=${process.env.TMDB_API_KEY}`,
+	)
+		.then((r) => {
+			if (!r.ok) throw new Error(`HTTP ${r.status}`);
+			return r.json();
+		})
+		.then((list) =>
+			list
+				.map((c) => c.iso_3166_1)
+				.filter((code) => !DRAMA.includes(code)),
+		)
+		.catch((e) => {
+			restCountries = null;
+			throw e;
+		});
+	return restCountries;
+}
+
+async function countryParam(origin) {
+	if (!origin) return "";
+	const codes = origin === "drama" ? DRAMA : await getRestCountries();
+	return `&with_origin_country=${codes.join("|")}`;
+}
+
+function buildMonthUrl(year, month, country) {
 	const pad = (n) => String(n).padStart(2, "0");
 	const lastDay = new Date(year, month, 0).getDate();
-	const country = countryOrigin
-		? `&with_origin_country=${countryOrigin}`
-		: "";
 	return `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}${country}&first_air_date.gte=${year}-${pad(month)}-01&first_air_date.lte=${year}-${pad(month)}-${lastDay}&sort_by=popularity.desc`;
 }
 
-function buildEndedUrl(countryOrigin) {
-	const country = countryOrigin
-		? `&with_origin_country=${countryOrigin}`
-		: "";
+function buildEndedUrl(country) {
 	return `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}${country}&with_status=2&sort_by=popularity.desc`;
 }
 
@@ -27,7 +50,7 @@ const toDay = (date) =>
 
 export async function useTmdbTvDiscoverAPI(req, res) {
 	try {
-		const { countryOrigin, page } = req.query;
+		const { origin, page } = req.query;
 		const year = parseInt(req.query.year, 10);
 		const month = parseInt(req.query.month, 10);
 		const now = new Date();
@@ -36,9 +59,10 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 			(year === now.getFullYear() && month > now.getMonth() + 1);
 
 		// TO GET TMDBID AND POPULARITY SORT
+		const country = await countryParam(origin);
 		const baseUrl = isFuture
-			? buildEndedUrl(countryOrigin)
-			: buildMonthUrl(year, month, countryOrigin);
+			? buildEndedUrl(country)
+			: buildMonthUrl(year, month, country);
 		const discoverRes = await httpFetch(`${baseUrl}&page=${page}`);
 		if (!discoverRes.ok) throw new Error(`HTTP ${discoverRes.status}`);
 		const data = await discoverRes.json();
@@ -98,6 +122,7 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 					? `https://image.tmdb.org/t/p/w500${s.poster_path}`
 					: null,
 				first_air_date: s.first_air_date,
+				originCountry: s.origin_country ?? [],
 				imdbId: d.imdbId ?? "",
 				imdbRating: d.imdbId
 					? (imdbRes[d.imdbId]?.rating ?? null)
