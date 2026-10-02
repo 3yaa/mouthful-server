@@ -7,7 +7,6 @@ const SEASON_QUERY = `
     $seasonYear: Int
     $formats: [MediaFormat]
     $status: MediaStatus
-    $startAfter: FuzzyDateInt
     $startBefore: FuzzyDateInt
     $endAfter: FuzzyDateInt
   ) {
@@ -21,7 +20,6 @@ const SEASON_QUERY = `
         seasonYear: $seasonYear
         format_in: $formats
         status: $status
-        startDate_greater: $startAfter
         startDate_lesser: $startBefore
         endDate_greater: $endAfter
       ) {

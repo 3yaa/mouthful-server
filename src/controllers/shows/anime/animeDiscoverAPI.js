@@ -108,28 +108,7 @@ function shapeWork(anime, fribb, isMovie) {
 	};
 }
 
-// a fuzzy date with no day sits on 00 -- the bounds straddle it
-function monthFilter(year, month) {
-	const end = new Date(year, month, 1);
-	const next = fuzzy(end.getFullYear(), end.getMonth() + 1) - 1;
-	return {
-		filter: {
-			formats: ["MOVIE"],
-			startAfter: fuzzy(year, month) - 2,
-			startBefore: next,
-		},
-		end,
-	};
-}
-
-async function worksFor({ tab, season, year, month }) {
-	if (month) {
-		const { filter, end } = monthFilter(year, month);
-		return fetchSeasonWorks(
-			filter,
-			end < new Date() ? SETTLED_TTL : LIVE_TTL,
-		);
-	}
+async function worksFor({ tab, season, year }) {
 	const { start, end, startFuzzy } = seasonBounds(season, year);
 	const ttl = end < new Date() ? SETTLED_TTL : LIVE_TTL;
 	if (tab === "movies") {

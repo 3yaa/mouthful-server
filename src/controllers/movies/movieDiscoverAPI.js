@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
 import { httpFetch } from "../utils/httpFetch.js";
-import { countryParam } from "../utils/tmdbOrigins.js";
 import { tmdbPageSlice } from "../utils/tmdbPages.js";
 
 dotenv.config();
@@ -9,10 +8,10 @@ dotenv.config();
 const TMDB = "https://api.themoviedb.org/3";
 const PER_PAGE = 24;
 
-function buildMonthUrl(year, month, country) {
+function buildMonthUrl(year, month) {
 	const pad = (n) => String(n).padStart(2, "0");
 	const lastDay = new Date(year, month, 0).getDate();
-	return `${TMDB}/discover/movie?api_key=${process.env.TMDB_API_KEY}${country}&include_adult=false&primary_release_date.gte=${year}-${pad(month)}-01&primary_release_date.lte=${year}-${pad(month)}-${lastDay}&sort_by=popularity.desc`;
+	return `${TMDB}/discover/movie?api_key=${process.env.TMDB_API_KEY}&include_adult=false&primary_release_date.gte=${year}-${pad(month)}-01&primary_release_date.lte=${year}-${pad(month)}-${lastDay}&sort_by=popularity.desc`;
 }
 
 async function movieDetails(id) {
@@ -29,10 +28,9 @@ async function movieDetails(id) {
 
 export async function useTmdbMovieDiscoverAPI(req, res) {
 	try {
-		const { year, month, page, origin } = req.validated;
-		const country = await countryParam(origin);
+		const { year, month, page } = req.validated;
 		const { results: rawMovies, totalPages } = await tmdbPageSlice(
-			buildMonthUrl(year, month, country),
+			buildMonthUrl(year, month),
 			page,
 			PER_PAGE,
 		);

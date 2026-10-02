@@ -17,7 +17,10 @@ export async function tmdbPageSlice(baseUrl, page, perPage) {
 			return r.json();
 		}),
 	);
-	const results = pages.flatMap((p) => p.results ?? []);
+	const seen = new Set();
+	const results = pages
+		.flatMap((p) => p.results ?? [])
+		.filter((r) => !seen.has(r.id) && seen.add(r.id));
 	const offset = start - (first - 1) * TMDB_PAGE;
 	const total = Math.min(
 		pages[0]?.total_results ?? 0,
