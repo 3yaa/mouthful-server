@@ -1,37 +1,13 @@
 import dotenv from "dotenv";
 import { getImdbRatings } from "../../imdbRating/imdbRatingCache.js";
 import { httpFetch } from "../../utils/httpFetch.js";
+import { countryParam } from "../../utils/tmdbOrigins.js";
+import { tmdbPageSlice } from "../../utils/tmdbPages.js";
 
 dotenv.config();
 
-const DRAMA = ["KR", "CN"];
-
-let restCountries = null;
-function getRestCountries() {
-	restCountries ??= httpFetch(
-		`https://api.themoviedb.org/3/configuration/countries?api_key=${process.env.TMDB_API_KEY}`,
-	)
-		.then((r) => {
-			if (!r.ok) throw new Error(`HTTP ${r.status}`);
-			return r.json();
-		})
-		.then((list) =>
-			list
-				.map((c) => c.iso_3166_1)
-				.filter((code) => !DRAMA.includes(code)),
-		)
-		.catch((e) => {
-			restCountries = null;
-			throw e;
-		});
-	return restCountries;
-}
-
-async function countryParam(origin) {
-	if (!origin) return "";
-	const codes = origin === "drama" ? DRAMA : await getRestCountries();
-	return `&with_origin_country=${codes.join("|")}`;
-}
+// four rows of the six-wide grid
+const PER_PAGE = 24;
 
 function buildMonthUrl(year, month, country) {
 	const pad = (n) => String(n).padStart(2, "0");
@@ -63,11 +39,11 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 		const baseUrl = isFuture
 			? buildEndedUrl(country)
 			: buildMonthUrl(year, month, country);
-		const discoverRes = await httpFetch(`${baseUrl}&page=${page}`);
-		if (!discoverRes.ok) throw new Error(`HTTP ${discoverRes.status}`);
-		const data = await discoverRes.json();
-		const rawShows = data.results || [];
-		const totalPages = Math.min(data.total_pages ?? 1, 100);
+		const { results: rawShows, totalPages } = await tmdbPageSlice(
+			baseUrl,
+			parseInt(page, 10) || 1,
+			PER_PAGE,
+		);
 
 		// ACTUALLY GET ALL THE DATAFIELDS
 		const details = await Promise.all(

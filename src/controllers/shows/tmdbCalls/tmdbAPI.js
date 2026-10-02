@@ -42,16 +42,27 @@ export async function tmdbFetch(path, params = {}) {
 }
 
 // --- 1st call -- title | tmdbId {dup check as well }
-export async function getTmdbId(title, year, userId, forceAnime) {
+async function searchTmdbShow(title, year, forceAnime) {
 	const data = await tmdbFetch(
 		"/search/tv",
 		year ? { query: title, first_air_date_year: year } : { query: title },
 	);
 	const results = data.results ?? [];
-	let searchSaysAnime = runAnime(forceAnime, isAnime(results[0]));
+	const searchSaysAnime = runAnime(forceAnime, isAnime(results[0]));
 	// for anime go thru to find main node
-	let show =
+	const show =
 		(searchSaysAnime ? await pickAnimeResult(results) : null) ?? results[0];
+	return { show, searchSaysAnime };
+}
+
+export async function getTmdbId(title, year, userId, forceAnime, knownId) {
+	// a known id skips the search
+	let { show, searchSaysAnime } = knownId
+		? {
+				show: { id: Number(knownId), name: title },
+				searchSaysAnime: runAnime(forceAnime, false),
+			}
+		: await searchTmdbShow(title, year, forceAnime);
 	// tmdb's tv index dont answer to the title
 	if (!show && forceAnime !== "0") {
 		show = await animeChainRootFor(title, year);

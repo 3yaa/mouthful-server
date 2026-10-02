@@ -4,6 +4,7 @@ import {
 	useShowRefreshAPI,
 } from "../../controllers/shows/showAPI.js";
 import {
+	validateAnimeDiscoverAPI,
 	validateAnimeStudioAPI,
 	validateShowRatingAPI,
 	validateShowsAPI,
@@ -13,6 +14,7 @@ import {
 import { useTmdbTvDiscoverAPI } from "../../controllers/shows/tmdbCalls/showDiscoverAPI.js";
 import { useOmdbEpisodeRatings } from "../../controllers/shows/tmdbCalls/showEpisodeRatingAPI.js";
 import { useAnimeStudioAPI } from "../../controllers/shows/anime/animeStudioAPI.js";
+import { useAnimeDiscoverAPI } from "../../controllers/shows/anime/animeDiscoverAPI.js";
 
 const showsAPIRouter = express.Router();
 
@@ -22,6 +24,11 @@ showsAPIRouter.get(
 	"/tmdb-tv-discover",
 	validateShowsDiscoverAPI,
 	useTmdbTvDiscoverAPI,
+);
+showsAPIRouter.get(
+	"/anime-discover",
+	validateAnimeDiscoverAPI,
+	useAnimeDiscoverAPI,
 );
 showsAPIRouter.get(
 	"/episodes-score",

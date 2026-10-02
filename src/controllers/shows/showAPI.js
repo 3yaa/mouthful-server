@@ -30,6 +30,7 @@ export async function useShowAPI(req, res) {
 			req.query.year,
 			req.user.id,
 			req.query.forceAnime,
+			req.query.tmdbId,
 		);
 		// run anime chain concurrently
 		const early = searchSaysAnime ? startAnimeChain(detected.tmdbId) : null;

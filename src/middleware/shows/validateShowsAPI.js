@@ -1,10 +1,16 @@
 export const validateShowsAPI = (req, res, next) => {
-	const { title, year } = req.query;
+	const { title, year, tmdbId } = req.query;
 	// missing title
 	if (!title) {
 		return res.status(400).json({
 			success: false,
 			message: "title parameter is required",
+		});
+	}
+	if (tmdbId !== undefined && !/^\d+$/.test(tmdbId)) {
+		return res.status(400).json({
+			success: false,
+			message: "tmdbId must be a number",
 		});
 	}
 	req.query.title = title.trim();
@@ -72,5 +78,59 @@ export const validateAnimeStudioAPI = (req, res, next) => {
 		});
 	}
 
+	next();
+};
+
+const SEASONS = ["WINTER", "SPRING", "SUMMER", "FALL"];
+const ANIME_TABS = ["new", "continuing", "movies"];
+
+export const validateAnimeDiscoverAPI = (req, res, next) => {
+	const season = String(req.query.season ?? "").toUpperCase();
+	const year = parseInt(req.query.year, 10);
+	const page = parseInt(req.query.page, 10);
+	const tab = req.query.tab ?? "new";
+	// films only
+	const month =
+		req.query.month !== undefined ? parseInt(req.query.month, 10) : null;
+
+	if (month !== null) {
+		if (!Number.isInteger(month) || month < 1 || month > 12) {
+			return res.status(400).json({
+				success: false,
+				message: "month must be 1-12",
+			});
+		}
+		if (tab !== "movies") {
+			return res.status(400).json({
+				success: false,
+				message: "month only applies to the movies tab",
+			});
+		}
+	} else if (!SEASONS.includes(season)) {
+		return res.status(400).json({
+			success: false,
+			message: "season must be winter, spring, summer or fall",
+		});
+	}
+	if (!Number.isInteger(year) || year < 1940 || year > 2100) {
+		return res.status(400).json({
+			success: false,
+			message: "year must be a 4-digit year",
+		});
+	}
+	if (!ANIME_TABS.includes(tab)) {
+		return res.status(400).json({
+			success: false,
+			message: "tab must be new, continuing or movies",
+		});
+	}
+	req.validated = {
+		...(req.validated ?? {}),
+		season: month ? null : season,
+		month,
+		year,
+		tab,
+		page: Number.isInteger(page) && page > 0 ? page : 1,
+	};
 	next();
 };

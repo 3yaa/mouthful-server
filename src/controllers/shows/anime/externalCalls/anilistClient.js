@@ -68,7 +68,7 @@ async function anilistCall(query, variables, attempt = 0) {
 export async function anilistRequest(
 	query,
 	variables,
-	{ cacheKey, bypassCache = false } = {},
+	{ cacheKey, bypassCache = false, ttl = CACHE_TTL } = {},
 ) {
 	// rides in the key -- so don't read its own old answer
 	const key = JSON.stringify({ cacheKey, query, variables });
@@ -79,7 +79,7 @@ export async function anilistRequest(
 	}
 
 	const value = await anilistCall(query, variables);
-	cache.set(key, { value, expires: Date.now() + CACHE_TTL });
+	cache.set(key, { value, expires: Date.now() + ttl });
 
 	// prune cache
 	if (cache.size > CACHE_MAX) {
