@@ -277,6 +277,12 @@ export const patchShow = async (req, res) => {
 
 		// rolled up item is an oponnent
 		if (scoreWritten && before?.anilist_id != null) {
+			//
+			if (updates.score_mu == null)
+				await client.query(
+					`UPDATE anime_nodes SET score_mu=NULL, score_phi=NULL WHERE show_id=$1`,
+					[showId],
+				);
 			if (updates.score_mu != null) {
 				await pushRowScoreDown(
 					client,
