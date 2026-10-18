@@ -53,10 +53,10 @@ export const validateMovieDiscoverAPI = (req, res, next) => {
 			message: "month must be 1-12",
 		});
 	}
-	if (origin !== undefined && origin !== "desi") {
+	if (origin !== undefined && origin !== "desi" && origin !== "rest") {
 		return res.status(400).json({
 			success: false,
-			message: "origin must be desi or left out",
+			message: "origin must be desi, rest or left out",
 		});
 	}
 	if (sort !== undefined && sort !== "rated") {
