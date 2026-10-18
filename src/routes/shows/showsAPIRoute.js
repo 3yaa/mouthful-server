@@ -9,12 +9,14 @@ import {
 	validateShowRatingAPI,
 	validateShowsAPI,
 	validateShowsDiscoverAPI,
+	validateShowTrailerAPI,
 	validateTMDBIdAPI,
 } from "../../middleware/shows/validateShowsAPI.js";
 import { useTmdbTvDiscoverAPI } from "../../controllers/shows/tmdbCalls/showDiscoverAPI.js";
 import { useOmdbEpisodeRatings } from "../../controllers/shows/tmdbCalls/showEpisodeRatingAPI.js";
 import { useAnimeStudioAPI } from "../../controllers/shows/anime/animeStudioAPI.js";
 import { useAnimeDiscoverAPI } from "../../controllers/shows/anime/animeDiscoverAPI.js";
+import { useShowTrailerAPI } from "../../controllers/utils/trailerAPI.js";
 
 const showsAPIRouter = express.Router();
 
@@ -36,5 +38,6 @@ showsAPIRouter.get(
 	useOmdbEpisodeRatings,
 );
 showsAPIRouter.get("/anime-studio", validateAnimeStudioAPI, useAnimeStudioAPI);
+showsAPIRouter.get("/trailer", validateShowTrailerAPI, useShowTrailerAPI);
 
 export { showsAPIRouter };

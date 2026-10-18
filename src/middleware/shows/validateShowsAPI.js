@@ -116,3 +116,30 @@ export const validateAnimeDiscoverAPI = (req, res, next) => {
 	};
 	next();
 };
+
+const isDigits = (value) => /^\d+$/.test(value ?? "");
+
+// anime node by anilist id, any other show by tmdb id + season
+export const validateShowTrailerAPI = (req, res, next) => {
+	const { anilistId, tmdbId, season } = req.query;
+
+	if (!isDigits(anilistId) && !isDigits(tmdbId)) {
+		return res.status(400).json({
+			success: false,
+			message: "anilistId or tmdbId required",
+		});
+	}
+	if (season !== undefined && !isDigits(season)) {
+		return res.status(400).json({
+			success: false,
+			message: "season must be a number",
+		});
+	}
+	req.validated = {
+		...(req.validated ?? {}),
+		anilistId: isDigits(anilistId) ? Number(anilistId) : null,
+		tmdbId: isDigits(tmdbId) ? tmdbId : null,
+		season: isDigits(season) ? Number(season) : null,
+	};
+	next();
+};

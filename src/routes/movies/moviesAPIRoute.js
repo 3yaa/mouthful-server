@@ -4,6 +4,7 @@ import {
 	useMovieTmdbRefreshAPI,
 } from "../../controllers/movies/tmdbAPI.js";
 import { useTmdbMovieDiscoverAPI } from "../../controllers/movies/movieDiscoverAPI.js";
+import { useMovieTrailerAPI } from "../../controllers/utils/trailerAPI.js";
 import {
 	validateMovieDiscoverAPI,
 	validateMovieMetaAPI,
@@ -19,5 +20,6 @@ moviesAPIRouter.get(
 	validateMovieDiscoverAPI,
 	useTmdbMovieDiscoverAPI,
 );
+moviesAPIRouter.get("/trailer", validateTmdbIdAPI, useMovieTrailerAPI);
 
 export { moviesAPIRouter };
