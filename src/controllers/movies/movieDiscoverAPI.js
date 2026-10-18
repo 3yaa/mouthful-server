@@ -18,16 +18,18 @@ const PER_PAGE = 24;
 // a movie's runtime and genres barely move
 const DETAILS_TTL = 24 * 60 * 60 * 1000;
 
-async function buildMonthUrl(year, month, origin) {
+// a month, or a run of them for the upcoming pages
+async function buildRangeUrl(year, month, months, origin) {
 	const pad = (n) => String(n).padStart(2, "0");
-	const lastDay = new Date(year, month, 0).getDate();
+	const end = new Date(year, month - 1 + months, 0);
+	const to = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
 	const origins =
 		origin === "desi"
 			? `&with_origin_country=${DESI.join("|")}`
 			: origin === "rest"
 				? await originsExcept(DESI)
 				: "";
-	return `${TMDB}/discover/movie?api_key=${process.env.TMDB_API_KEY}&include_adult=false${origins}&primary_release_date.gte=${year}-${pad(month)}-01&primary_release_date.lte=${year}-${pad(month)}-${lastDay}&sort_by=popularity.desc`;
+	return `${TMDB}/discover/movie?api_key=${process.env.TMDB_API_KEY}&include_adult=false${origins}&primary_release_date.gte=${year}-${pad(month)}-01&primary_release_date.lte=${to}&sort_by=popularity.desc`;
 }
 
 const cachedDetails = ttlMemo(
@@ -55,12 +57,13 @@ const imdbIdOf = (id) =>
 
 export async function useTmdbMovieDiscoverAPI(req, res) {
 	try {
-		const { year, month, page, origin, sort } = req.validated;
-		const url = await buildMonthUrl(year, month, origin);
+		const { year, month, months, page, origin, sort } = req.validated;
+		const url = await buildRangeUrl(year, month, months, origin);
 		const {
 			results: rawMovies,
 			totalPages,
 			dropped,
+			minVotes,
 		} = sort === "rated"
 			? await tmdbRatedSlice([url], page, PER_PAGE, imdbIdOf)
 			: await tmdbPageSlice(url, page, PER_PAGE);
@@ -96,7 +99,7 @@ export async function useTmdbMovieDiscoverAPI(req, res) {
 			success: true,
 			movies,
 			totalPages,
-			...(dropped && { dropped: dropped.map(droppedRow) }),
+			...(dropped && { dropped: dropped.map(droppedRow), minVotes }),
 		});
 	} catch (error) {
 		console.error("TMDB movie discover fetch failed: ", error);

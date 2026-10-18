@@ -39,7 +39,7 @@ export const validateMovieDiscoverAPI = (req, res, next) => {
 	const year = parseInt(req.query.year, 10);
 	const month = parseInt(req.query.month, 10);
 	const page = parseInt(req.query.page, 10);
-	const { origin, sort } = req.query;
+	const { origin, sort, months } = req.query;
 
 	if (!Number.isInteger(year) || year < 1900 || year > 2100) {
 		return res.status(400).json({
@@ -65,10 +65,18 @@ export const validateMovieDiscoverAPI = (req, res, next) => {
 			message: "sort must be rated or left out",
 		});
 	}
+	// a season at most -- the upcoming pages group months
+	if (months !== undefined && !/^[1-3]$/.test(months)) {
+		return res.status(400).json({
+			success: false,
+			message: "months must be 1, 2 or 3",
+		});
+	}
 	req.validated = {
 		...(req.validated ?? {}),
 		year,
 		month,
+		months: months ? Number(months) : 1,
 		origin,
 		sort,
 		page: Number.isInteger(page) && page > 0 ? page : 1,

@@ -14,6 +14,7 @@ import { ttlMemo } from "../../utils/ttlMemo.js";
 dotenv.config();
 
 const PER_PAGE = 24;
+const DRAMA_MIN_VOTES = 20;
 // the air days and current episode move as episodes land
 const DETAILS_TTL = 30 * 60 * 1000;
 
@@ -72,8 +73,15 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 			results: rawShows,
 			totalPages,
 			dropped,
+			minVotes,
 		} = sort === "rated"
-			? await tmdbRatedSlice(urls, at, PER_PAGE, imdbIdOf)
+			? await tmdbRatedSlice(
+					urls,
+					at,
+					PER_PAGE,
+					imdbIdOf,
+					origin === "drama" ? DRAMA_MIN_VOTES : undefined,
+				)
 			: await tmdbMergedSlice(urls, at, PER_PAGE);
 		if (sort !== "rated" && at === 1) warmRatedPool(urls, imdbIdOf);
 
@@ -112,7 +120,7 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 			success: true,
 			shows: assembled,
 			totalPages,
-			...(dropped && { dropped: dropped.map(droppedRow) }),
+			...(dropped && { dropped: dropped.map(droppedRow), minVotes }),
 		});
 	} catch (error) {
 		console.error("TMDB-TV discover fetch failed: ", error);

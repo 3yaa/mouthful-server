@@ -140,10 +140,16 @@ const whenBuilt = () =>
 		: (built ??= new Promise((resolve) => (release = resolve)));
 
 // thinly voted and unrated titles drop out
-export async function tmdbRatedSlice(baseUrls, page, perPage, imdbIdOf) {
+export async function tmdbRatedSlice(
+	baseUrls,
+	page,
+	perPage,
+	imdbIdOf,
+	minVotes = MIN_VOTES,
+) {
 	building++;
 	try {
-		return await rankPool(baseUrls, page, perPage, imdbIdOf);
+		return await rankPool(baseUrls, page, perPage, imdbIdOf, minVotes);
 	} finally {
 		if (--building === 0 && built) {
 			release();
@@ -152,7 +158,7 @@ export async function tmdbRatedSlice(baseUrls, page, perPage, imdbIdOf) {
 	}
 }
 
-async function rankPool(baseUrls, page, perPage, imdbIdOf) {
+async function rankPool(baseUrls, page, perPage, imdbIdOf, minVotes) {
 	const { results: pool } = await tmdbMergedSlice(baseUrls, 1, RATED_POOL);
 	// undefined = the lookup failed, null = imdb has no entry
 	let failed = 0;
@@ -175,13 +181,13 @@ async function rankPool(baseUrls, page, perPage, imdbIdOf) {
 	}));
 	// a card keeps the id it was ranked by if its details call fails
 	const ranked = scored
-		.filter(({ imdb }) => imdb?.votes >= MIN_VOTES)
+		.filter(({ imdb }) => imdb?.votes >= minVotes)
 		.sort(byRating)
 		.map(({ item, imdbId }) => ({ ...item, imdbId }));
 	//
 	const dropped = [
 		...scored
-			.filter(({ imdb }) => imdb && imdb.votes < MIN_VOTES)
+			.filter(({ imdb }) => imdb && imdb.votes < minVotes)
 			.sort(byRating),
 		...scored.filter(({ imdb, imdbId }) => !imdb && imdbId !== undefined),
 	];
@@ -191,6 +197,7 @@ async function rankPool(baseUrls, page, perPage, imdbIdOf) {
 		results: ranked.slice(start, start + perPage),
 		totalPages,
 		dropped,
+		minVotes,
 	};
 }
 
