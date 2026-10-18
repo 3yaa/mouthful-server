@@ -12,6 +12,12 @@ const isInvalidCover = (cover) =>
 		cover.color !== null &&
 		typeof cover.color !== "string");
 
+const isInvalidImdbId = (id) =>
+	typeof id !== "string" || !/^tt\d{1,20}$/.test(id);
+
+// the table checks the same -- a movie is identified by its tmdb id
+const isInvalidTmdbId = (id) => !/^\d{1,20}$/.test(String(id));
+
 const isInvalidGenres = (genres) =>
 	!Array.isArray(genres) ||
 	genres.length > 20 ||
@@ -150,10 +156,7 @@ export const validateMovieRefresh = (req, res, next) => {
 		"backdropUrl",
 		"logoUrl",
 		"series",
-		// legacy have no tmdb id -- a full reload resolves and writes one
-		"tmdbId",
-		"director",
-		"dateReleased",
+		"imdbId",
 		"genres",
 		"runtime",
 		"title",
@@ -173,6 +176,13 @@ export const validateMovieRefresh = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message: "Invalid refresh field provided",
+		});
+	}
+	// imdbId -- a reload fills one in, never clears it
+	if (updates.imdbId !== undefined && isInvalidImdbId(updates.imdbId)) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid imdbId field provided (must be tt digits)",
 		});
 	}
 	// cover
@@ -225,11 +235,11 @@ export const validateMovieCreate = (req, res, next) => {
 			message: "No title to create movie",
 		});
 	}
-	// imdbId
-	if (!imdbId) {
+	// imdbId -- optional, some films have no imdb entry
+	if (imdbId != null && isInvalidImdbId(imdbId)) {
 		return res.status(400).json({
 			success: false,
-			message: "No imdbId to create movie",
+			message: "Invalid imdbId field provided (must be tt digits or null)",
 		});
 	}
 	// tmdbId
@@ -237,6 +247,12 @@ export const validateMovieCreate = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message: "No tmdbId to create movie",
+		});
+	}
+	if (isInvalidTmdbId(tmdbId)) {
+		return res.status(400).json({
+			success: false,
+			message: "Invalid tmdbId field provided (must be digits)",
 		});
 	}
 	// status
@@ -252,8 +268,8 @@ export const validateMovieCreate = (req, res, next) => {
 		}
 	}
 	// NON REQUIRED
-	// date released
-	if (dateReleased !== undefined) {
+	// date released -- null when tmdb has no date yet
+	if (dateReleased != null) {
 		const parsedYear = parseInt(dateReleased);
 		if (
 			isNaN(parsedYear) ||

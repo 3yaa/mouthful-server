@@ -1,5 +1,4 @@
 import dotenv from "dotenv";
-import { pool } from "../../config/db.js";
 import { httpFetch } from "./httpFetch.js";
 
 dotenv.config();
@@ -48,25 +47,7 @@ export async function useTmdbShowCastAPI(req, res) {
 
 export async function useTmdbMovieCastAPI(req, res) {
 	try {
-		let { tmdbId, imdbId, movieId } = req.query;
-
-		// LEGACY -- SOME MOVIES DON'T HAVE tmdbId
-		if (tmdbId === "-1") {
-			const findRes = await httpFetch(
-				`https://api.themoviedb.org/3/find/${imdbId}?api_key=${process.env.TMDB_API_KEY}&external_source=imdb_id`,
-			);
-			if (!findRes.ok)
-				throw new Error(`TMDB find HTTP ${findRes.status}`);
-			const findData = await findRes.json();
-			const found = findData.movie_results?.[0];
-			if (!found) throw new Error("Movie not found in TMDB");
-			tmdbId = String(found.id);
-			// put in the tmdb for legacy
-			await pool.query(
-				"UPDATE movies SET tmdb_id=$1 WHERE id=$2 AND user_id=$3",
-				[tmdbId, movieId, req.user.id],
-			);
-		}
+		const { tmdbId } = req.query;
 
 		const tmdbRes = await httpFetch(
 			`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${process.env.TMDB_API_KEY}`,

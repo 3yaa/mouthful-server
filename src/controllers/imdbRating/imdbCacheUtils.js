@@ -15,8 +15,12 @@ export async function fetchBuffer(url, file, force = false) {
 	) {
 		return readFileSync(DISK_CACHE);
 	}
-	// write to disk
+	// write to disk -- a failed download keeps the last good copy
 	const res = await httpFetch(url);
+	if (!res.ok) {
+		if (existsSync(DISK_CACHE)) return readFileSync(DISK_CACHE);
+		throw new Error(`IMDb dataset HTTP ${res.status}`);
+	}
 	const buffer = Buffer.from(await res.arrayBuffer());
 	writeFileSync(DISK_CACHE, buffer);
 	return buffer;

@@ -102,8 +102,7 @@ async function resolveSeries(details, tmdbId) {
 export async function useMovieTmdbAPI(req, res) {
 	try {
 		const userId = req.user.id;
-		const { title, year, reload, movieOnly, tmdbId: knownId } = req.query;
-		const isReload = reload === "1";
+		const { title, year, movieOnly, tmdbId: knownId } = req.query;
 		const onlyMovie = movieOnly === "1";
 
 		// first call -- skipped when the caller knows id
@@ -120,10 +119,7 @@ export async function useMovieTmdbAPI(req, res) {
 		const tmdbId = String(match.id);
 
 		// check for dup
-		if (
-			!isReload &&
-			(await checkDuplicate("movies", "tmdb_id", tmdbId, userId))
-		) {
+		if (await checkDuplicate("movies", "tmdb_id", tmdbId, userId)) {
 			return res.status(409).json({
 				success: false,
 				title: match.title,
@@ -136,17 +132,10 @@ export async function useMovieTmdbAPI(req, res) {
 		// second call
 		const details = await getMovieDetails(tmdbId);
 		const imdbId = details.external_ids?.imdb_id || null;
-		if (!imdbId) {
-			return res.status(404).json({
-				success: false,
-				message: `No IMDb id on record for "${match.title}"`,
-				error: "Missing imdb id",
-			});
-		}
 
-		// legacy some rows are missing tmdbId -- 2nd dup check
+		// the same film filed under a second tmdb entry -- 2nd dup check
 		if (
-			!isReload &&
+			imdbId &&
 			(await checkDuplicate("movies", "imdb_id", imdbId, userId))
 		) {
 			return res.status(409).json({
@@ -163,27 +152,23 @@ export async function useMovieTmdbAPI(req, res) {
 		const releasedYear = getReleaseYear(details.release_date);
 
 		// find anime chain from movie -- if anime movie
-		const pendingAnime =
-			isReload || onlyMovie
-				? Promise.resolve(null)
-				: resolveAnimeMovie({
-						imdbId,
-						title: movieTitle,
-						year: releasedYear,
-						searchFallback: isAnime(details),
-					}).catch((error) => {
-						// fail silentily
-						console.warn(
-							"Anime movie resolve failed: ",
-							error.message,
-						);
-						return { kind: "movie", why: "lookup failed" };
-					});
+		const pendingAnime = onlyMovie
+			? Promise.resolve(null)
+			: resolveAnimeMovie({
+					imdbId,
+					title: movieTitle,
+					year: releasedYear,
+					searchFallback: isAnime(details),
+				}).catch((error) => {
+					// fail silentily
+					console.warn("Anime movie resolve failed: ", error.message);
+					return { kind: "movie", why: "lookup failed" };
+				});
 
 		// third call
 		const [series, ratings, animeMovie] = await Promise.all([
 			resolveSeries(details, tmdbId),
-			getImdbRatings([imdbId]),
+			imdbId ? getImdbRatings([imdbId]) : {},
 			pendingAnime,
 		]);
 
@@ -206,7 +191,7 @@ export async function useMovieTmdbAPI(req, res) {
 				released_date: releasedYear,
 				genres: getGenres(details),
 				runtime: details.runtime || null,
-				imdbRating: ratings[imdbId]?.rating ?? null,
+				imdbRating: imdbId ? (ratings[imdbId]?.rating ?? null) : null,
 				poster_url: posters[0] ?? null,
 				backdrop_url: backdrops[0] ?? null,
 				posters,

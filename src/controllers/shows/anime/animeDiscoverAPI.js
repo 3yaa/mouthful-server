@@ -108,6 +108,16 @@ function shapeWork(anime, fribb, isMovie) {
 	};
 }
 
+// anilist only scores a work once enough people have -- the unscored drop out
+const byScore = (works) =>
+	works
+		.filter((anime) => anime.averageScore != null)
+		.sort(
+			(a, z) =>
+				z.averageScore - a.averageScore ||
+				(z.popularity ?? 0) - (a.popularity ?? 0),
+		);
+
 // pages are cached apart
 const uniqueById = (works) => {
 	const seen = new Set();
@@ -161,19 +171,32 @@ async function worksFor({ tab, season, year }) {
 
 export async function useAnimeDiscoverAPI(req, res) {
 	try {
-		const { tab, page } = req.validated;
+		const { tab, page, sort } = req.validated;
 		const [works, fribb] = await Promise.all([
 			worksFor(req.validated),
 			getFribbMap(),
 		]);
-		const listed = works.filter((anime) => animeTitle(anime));
+		const titled = works.filter((anime) => animeTitle(anime));
+		const listed = sort === "rated" ? byScore(titled) : titled;
 		const totalPages = Math.max(1, Math.ceil(listed.length / PER_PAGE));
 		const start = (Math.min(page, totalPages) - 1) * PER_PAGE;
 		const anime = listed
 			.slice(start, start + PER_PAGE)
 			.map((work) => shapeWork(work, fribb, tab === "movies"));
+		// not enough people have scored these yet
+		const dropped =
+			sort === "rated"
+				? titled
+						.filter((work) => work.averageScore == null)
+						.map((work) => shapeWork(work, fribb, tab === "movies"))
+				: null;
 
-		res.status(200).json({ success: true, anime, totalPages });
+		res.status(200).json({
+			success: true,
+			anime,
+			totalPages,
+			...(dropped && { dropped }),
+		});
 	} catch (error) {
 		console.error("AniList season discover failed: ", error);
 		res.status(500).json({

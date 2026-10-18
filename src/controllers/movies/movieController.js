@@ -1,5 +1,10 @@
+import dotenv from "dotenv";
 import { pool } from "../../config/db.js";
 import { getImdbRatings } from "../imdbRating/imdbRatingCache.js";
+import { fetchJson } from "../utils/httpFetch.js";
+import { peekImdbId } from "../utils/imdbIdMap.js";
+
+dotenv.config();
 
 //
 const safeRatings = async (imdbIds) => {
@@ -11,6 +16,44 @@ const safeRatings = async (imdbIds) => {
 		return {};
 	}
 };
+
+// a tmdb entry that is gone has no imdb id to give
+const imdbIdOfMovie = (tmdbId) =>
+	fetchJson(
+		`https://api.themoviedb.org/3/movie/${tmdbId}/external_ids?api_key=${process.env.TMDB_API_KEY}`,
+	).then(
+		(ids) => ids.imdb_id || null,
+		(error) => {
+			if (error.status === 404) return null;
+			throw error;
+		},
+	);
+
+// tmdb is asked at most once a day and the list never waits on it
+async function fillImdbIds(rows, userId) {
+	// film already sits in the list under another tmdb entry
+	const held = new Set(rows.map((row) => row.imdb_id).filter(Boolean));
+	await Promise.all(
+		rows
+			.filter((row) => !row.imdb_id)
+			.map(async (row) => {
+				const imdbId = peekImdbId("movie", row.tmdb_id, imdbIdOfMovie);
+				if (!imdbId || held.has(imdbId)) return;
+				held.add(imdbId);
+				try {
+					await pool.query(
+						"UPDATE movies SET imdb_id=$1 WHERE id=$2 AND user_id=$3 AND imdb_id IS NULL",
+						[imdbId, row.id, userId],
+					);
+					row.imdb_id = imdbId;
+				} catch (error) {
+					// a row added while this load ran took it
+					if (error.code !== "23505")
+						console.error("imdb id fill failed: ", error.message);
+				}
+			}),
+	);
+}
 
 const convertMovieToCamelCase = (movie) => ({
 	id: movie.id,
@@ -92,6 +135,7 @@ export const getMovies = async (req, res) => {
 
 		// get the imdb score
 		const rows = result.rows;
+		await fillImdbIds(rows, userId);
 		const imdbIds = rows.filter((m) => m.imdb_id).map((m) => m.imdb_id);
 		const ratings = await safeRatings(imdbIds);
 
@@ -235,6 +279,13 @@ export const patchMovie = async (req, res) => {
 			data: convertedMovie,
 		});
 	} catch (error) {
+		if (error.code === "23505") {
+			return res.status(409).json({
+				success: false,
+				message: "Another movie in your library already has that id",
+				error: "Duplicate found",
+			});
+		}
 		console.error("Error updating movie: ", error);
 		res.status(500).json({
 			success: false,
@@ -303,7 +354,7 @@ export const createMovie = async (req, res) => {
 			scoreObj?.phi ?? null,
 			dateCompleted,
 			note,
-			imdbId,
+			imdbId ?? null,
 			tmdbId,
 			userId,
 		];
@@ -323,6 +374,13 @@ export const createMovie = async (req, res) => {
 			data: convertedMovie,
 		});
 	} catch (error) {
+		if (error.code === "23505") {
+			return res.status(409).json({
+				success: false,
+				message: "Movie already in your library",
+				error: "Duplicate found",
+			});
+		}
 		console.error("Error creating movie: ", error);
 		res.status(500).json({
 			success: false,

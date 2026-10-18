@@ -1,6 +1,8 @@
 import { httpFetch } from "./httpFetch.js";
 
 export const DRAMA = ["KR", "CN", "JP"];
+// movies only -- bengali films come from both IN and BD
+export const DESI = ["IN", "BD", "PK"];
 // anime
 const ANIMATION_GENRE = 16;
 const ANIME_KEYWORD = 210024;

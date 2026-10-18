@@ -40,7 +40,7 @@ export const validateTMDBIdAPI = (req, res, next) => {
 };
 
 export const validateShowsDiscoverAPI = (req, res, next) => {
-	const { year, month, page, origin, country, months } = req.query;
+	const { year, month, page, origin, country, months, sort } = req.query;
 
 	if (!year || !month || !page) {
 		return res.status(400).json({
@@ -68,6 +68,12 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message: "months must be 1, 2 or 3",
+		});
+	}
+	if (sort !== undefined && sort !== "rated") {
+		return res.status(400).json({
+			success: false,
+			message: "sort must be rated or left out",
 		});
 	}
 	next();
@@ -107,6 +113,7 @@ export const validateAnimeDiscoverAPI = (req, res, next) => {
 	const year = parseInt(req.query.year, 10);
 	const page = parseInt(req.query.page, 10);
 	const tab = req.query.tab ?? "new";
+	const { sort } = req.query;
 	if (!SEASONS.includes(season)) {
 		return res.status(400).json({
 			success: false,
@@ -125,11 +132,18 @@ export const validateAnimeDiscoverAPI = (req, res, next) => {
 			message: "tab must be new, continuing or movies",
 		});
 	}
+	if (sort !== undefined && sort !== "rated") {
+		return res.status(400).json({
+			success: false,
+			message: "sort must be rated or left out",
+		});
+	}
 	req.validated = {
 		...(req.validated ?? {}),
 		season,
 		year,
 		tab,
+		sort,
 		page: Number.isInteger(page) && page > 0 ? page : 1,
 	};
 	next();
