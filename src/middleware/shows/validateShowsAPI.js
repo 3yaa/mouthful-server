@@ -40,7 +40,7 @@ export const validateTMDBIdAPI = (req, res, next) => {
 };
 
 export const validateShowsDiscoverAPI = (req, res, next) => {
-	const { year, month, page, origin, country } = req.query;
+	const { year, month, page, origin, country, months } = req.query;
 
 	if (!year || !month || !page) {
 		return res.status(400).json({
@@ -61,6 +61,13 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message: `country is drama only, one of ${DRAMA.join(", ")}`,
+		});
+	}
+	// a season at most -- the upcoming pages group months
+	if (months !== undefined && !/^[1-3]$/.test(months)) {
+		return res.status(400).json({
+			success: false,
+			message: "months must be 1, 2 or 3",
 		});
 	}
 	next();

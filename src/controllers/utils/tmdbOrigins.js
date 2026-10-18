@@ -4,6 +4,7 @@ export const DRAMA = ["KR", "CN", "JP"];
 // anime
 const ANIMATION_GENRE = 16;
 const ANIME_KEYWORD = 210024;
+const JAPAN_LIVE = `&with_origin_country=JP&without_genres=${ANIMATION_GENRE}&without_keywords=${ANIME_KEYWORD}`;
 
 let restCountries = null;
 function getRestCountries() {
@@ -26,13 +27,12 @@ function getRestCountries() {
 	return restCountries;
 }
 
-// country narrows drama to one of its own
-export async function originParams(origin, country) {
-	if (!origin) return "";
-	if (origin === "drama")
-		return (
-			`&with_origin_country=${country ?? DRAMA.join("|")}` +
-			`&without_genres=${ANIMATION_GENRE}&without_keywords=${ANIME_KEYWORD}`
-		);
-	return `&with_origin_country=${(await getRestCountries()).join("|")}`;
+// one TMDB query each -- drama reads two as one feed, country narrows it to one
+export async function originFeeds(origin, country) {
+	if (!origin) return [""];
+	if (origin === "rest")
+		return [`&with_origin_country=${(await getRestCountries()).join("|")}`];
+	if (country === "JP") return [JAPAN_LIVE];
+	if (country) return [`&with_origin_country=${country}`];
+	return ["&with_origin_country=KR|CN", JAPAN_LIVE];
 }

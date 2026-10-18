@@ -1,22 +1,19 @@
 import dotenv from "dotenv";
 import { getImdbRatings } from "../../imdbRating/imdbRatingCache.js";
 import { httpFetch } from "../../utils/httpFetch.js";
-import { originParams } from "../../utils/tmdbOrigins.js";
-import { tmdbPageSlice } from "../../utils/tmdbPages.js";
+import { originFeeds } from "../../utils/tmdbOrigins.js";
+import { tmdbMergedSlice } from "../../utils/tmdbPages.js";
 
 dotenv.config();
 
 // four rows of the six-wide grid
 const PER_PAGE = 24;
 
-function buildMonthUrl(year, month, origins) {
+function buildRangeUrl(year, month, months, origins) {
 	const pad = (n) => String(n).padStart(2, "0");
-	const lastDay = new Date(year, month, 0).getDate();
-	return `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}${origins}&first_air_date.gte=${year}-${pad(month)}-01&first_air_date.lte=${year}-${pad(month)}-${lastDay}&sort_by=popularity.desc`;
-}
-
-function buildEndedUrl(origins) {
-	return `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}${origins}&with_status=2&sort_by=popularity.desc`;
+	const end = new Date(year, month - 1 + months, 0);
+	const to = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+	return `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}${origins}&first_air_date.gte=${year}-${pad(month)}-01&first_air_date.lte=${to}&sort_by=popularity.desc`;
 }
 
 const toDay = (date) =>
@@ -29,18 +26,12 @@ export async function useTmdbTvDiscoverAPI(req, res) {
 		const { origin, country, page } = req.query;
 		const year = parseInt(req.query.year, 10);
 		const month = parseInt(req.query.month, 10);
-		const now = new Date();
-		const isFuture =
-			year > now.getFullYear() ||
-			(year === now.getFullYear() && month > now.getMonth() + 1);
+		const months = parseInt(req.query.months, 10) || 1;
 
 		// TO GET TMDBID AND POPULARITY SORT
-		const origins = await originParams(origin, country);
-		const baseUrl = isFuture
-			? buildEndedUrl(origins)
-			: buildMonthUrl(year, month, origins);
-		const { results: rawShows, totalPages } = await tmdbPageSlice(
-			baseUrl,
+		const feeds = await originFeeds(origin, country);
+		const { results: rawShows, totalPages } = await tmdbMergedSlice(
+			feeds.map((origins) => buildRangeUrl(year, month, months, origins)),
 			parseInt(page, 10) || 1,
 			PER_PAGE,
 		);
