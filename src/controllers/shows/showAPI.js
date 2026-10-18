@@ -22,42 +22,52 @@ const sendError = (res, error) => {
 	});
 };
 
+// a title search, or a pinned tmdb id when the caller already knows it
+async function lookupShow({ title, year, forceAnime }, userId, pinnedId) {
+	const { searchSaysAnime, ...detected } = await getTmdbId(
+		title,
+		year,
+		userId,
+		forceAnime,
+		pinnedId,
+	);
+	// run anime chain concurrently
+	const early = searchSaysAnime ? startAnimeChain(detected.tmdbId) : null;
+	// only a live-action show carries seasons
+	const enriched = await getTmdbShowEnrichment(
+		detected.tmdbId,
+		!searchSaysAnime,
+	);
+	if (runAnime(forceAnime, enriched.wantAnime)) {
+		applyChain(
+			enriched.processedShow,
+			await (early ?? startAnimeChain(detected.tmdbId)),
+		);
+	}
+	await addSeasonRuntimes(
+		enriched.processedShow,
+		detected.tmdbId,
+		enriched.runtimes,
+	);
+	return {
+		...detected,
+		title: enriched.title ?? detected.title,
+		...enriched.processedShow,
+	};
+}
+
 export async function useShowAPI(req, res) {
 	try {
-		// uses to search
-		const { searchSaysAnime, ...detected } = await getTmdbId(
-			req.query.title,
-			req.query.year,
-			req.user.id,
-			req.query.forceAnime,
-			req.query.tmdbId,
-		);
-		// run anime chain concurrently
-		const early = searchSaysAnime ? startAnimeChain(detected.tmdbId) : null;
-		// only a live-action show carries seasons
-		const enriched = await getTmdbShowEnrichment(
-			detected.tmdbId,
-			!searchSaysAnime,
-		);
-		if (runAnime(req.query.forceAnime, enriched.wantAnime)) {
-			applyChain(
-				enriched.processedShow,
-				await (early ?? startAnimeChain(detected.tmdbId)),
-			);
-		}
-		await addSeasonRuntimes(
-			enriched.processedShow,
-			detected.tmdbId,
-			enriched.runtimes,
-		);
-		res.json({
-			success: true,
-			data: {
-				...detected,
-				title: enriched.title ?? detected.title,
-				...enriched.processedShow,
+		const pinnedId = req.query.tmdbId;
+		const data = await lookupShow(req.query, req.user.id, pinnedId).catch(
+			(error) => {
+				// tmdb drops merged duplicates an old id list still points at -- the title finds it
+				if (pinnedId && error.status === 404)
+					return lookupShow(req.query, req.user.id);
+				throw error;
 			},
-		});
+		);
+		res.json({ success: true, data });
 	} catch (error) {
 		sendError(res, error);
 	}
@@ -79,7 +89,10 @@ export async function useShowRefreshAPI(req, res) {
 			: null;
 		const enriched = await getTmdbShowEnrichment(tmdbId, !early);
 		if (
-			runAnime(req.query.forceAnime, enriched.wantAnime || Boolean(storedAnime))
+			runAnime(
+				req.query.forceAnime,
+				enriched.wantAnime || Boolean(storedAnime),
+			)
 		) {
 			applyChain(enriched.processedShow, await (early ?? chain()));
 		}

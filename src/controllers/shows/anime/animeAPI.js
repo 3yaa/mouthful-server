@@ -32,6 +32,7 @@ import {
 } from "./utils/shapeAnimes.js";
 import { compareStartDate, pickRoot } from "./utils/utilFunctions.js";
 import { shikimoriQuery } from "./externalCalls/shikimoriAPI.js";
+import { linkTmdbSeasons } from "./buildRelations/tmdbSeasonLinks.js";
 
 async function buildAnimeChain(
 	tmdbId,
@@ -79,6 +80,9 @@ async function buildAnimeChain(
 			candidates.add(anilistId);
 		}
 	}
+
+	// tmdb's seasons settle an anilist OTHER
+	await linkTmdbSeasons(enrichedNodes, candidates, rootId, tmdbId);
 
 	// PHASE 3.5: drop useless additionals and big alternatives
 	const dropped = [];
