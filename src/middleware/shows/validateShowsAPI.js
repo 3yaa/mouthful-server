@@ -1,3 +1,5 @@
+import { DRAMA } from "../../controllers/utils/tmdbOrigins.js";
+
 export const validateShowsAPI = (req, res, next) => {
 	const { title, year, tmdbId } = req.query;
 	// missing title
@@ -38,7 +40,7 @@ export const validateTMDBIdAPI = (req, res, next) => {
 };
 
 export const validateShowsDiscoverAPI = (req, res, next) => {
-	const { year, month, page, origin } = req.query;
+	const { year, month, page, origin, country } = req.query;
 
 	if (!year || !month || !page) {
 		return res.status(400).json({
@@ -50,6 +52,15 @@ export const validateShowsDiscoverAPI = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message: "origin must be drama or rest",
+		});
+	}
+	if (
+		country !== undefined &&
+		(origin !== "drama" || !DRAMA.includes(country))
+	) {
+		return res.status(400).json({
+			success: false,
+			message: `country is drama only, one of ${DRAMA.join(", ")}`,
 		});
 	}
 	next();

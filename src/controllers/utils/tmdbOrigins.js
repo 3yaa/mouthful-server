@@ -1,6 +1,9 @@
 import { httpFetch } from "./httpFetch.js";
 
-const DRAMA = ["KR", "CN"];
+export const DRAMA = ["KR", "CN", "JP"];
+// anime
+const ANIMATION_GENRE = 16;
+const ANIME_KEYWORD = 210024;
 
 let restCountries = null;
 function getRestCountries() {
@@ -23,8 +26,13 @@ function getRestCountries() {
 	return restCountries;
 }
 
-export async function countryParam(origin) {
+// country narrows drama to one of its own
+export async function originParams(origin, country) {
 	if (!origin) return "";
-	const codes = origin === "drama" ? DRAMA : await getRestCountries();
-	return `&with_origin_country=${codes.join("|")}`;
+	if (origin === "drama")
+		return (
+			`&with_origin_country=${country ?? DRAMA.join("|")}` +
+			`&without_genres=${ANIMATION_GENRE}&without_keywords=${ANIME_KEYWORD}`
+		);
+	return `&with_origin_country=${(await getRestCountries()).join("|")}`;
 }
