@@ -212,12 +212,10 @@ async function withSeries(book) {
 // audiobook pace
 const MINUTES_PER_PAGE = 2;
 
+// a sub-minute audiobook rounds to 0 -- fall back to the page count
 const timeSpentOf = (book) =>
-	book.audioSeconds
-		? Math.round(book.audioSeconds / 60)
-		: book.pages
-			? book.pages * MINUTES_PER_PAGE
-			: null;
+	Math.round((book.audioSeconds ?? 0) / 60) ||
+	(book.pages ? book.pages * MINUTES_PER_PAGE : null);
 
 // 3rd call -- series details
 

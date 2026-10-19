@@ -50,10 +50,23 @@ export async function writeMark(client, showId, anilistId, mark) {
 	);
 }
 
-// the row score IS the rollup once any part is scored -- with none, the row keeps whatever it already had
-export async function applyRollup(client, showId, seasons, marks) {
+// with none it keeps a row-level score, unless this write unscored the last part
+export async function applyRollup(
+	client,
+	showId,
+	seasons,
+	marks,
+	wasRolled = false,
+) {
 	const rolled = rollupOf(seasons, marks);
-	if (!rolled) return null;
+	if (!rolled) {
+		if (wasRolled)
+			await client.query(
+				`UPDATE shows SET score_mu=NULL, score_phi=NULL WHERE id=$1`,
+				[showId],
+			);
+		return null;
+	}
 	await client.query(
 		`UPDATE shows SET score_mu=$1, score_phi=$2 WHERE id=$3`,
 		[rolled.mu, rolled.phi, showId],

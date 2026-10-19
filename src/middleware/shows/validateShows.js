@@ -246,7 +246,7 @@ export const validateShowCreate = (req, res, next) => {
 	}
 	// NON REQUIRED
 	// date published
-	if (dateReleased !== undefined) {
+	if (dateReleased != null) {
 		const parsedYear = parseInt(dateReleased);
 		if (
 			isNaN(parsedYear) ||

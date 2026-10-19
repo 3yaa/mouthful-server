@@ -2,6 +2,7 @@ import { pool } from "../../../../config/db.js";
 import { convertShowToCamelCase } from "../../showControllers.js";
 import { chainIdsOf } from "../utils/utilFunctions.js";
 import { PARTS_JOIN, loadMarks, writeMark, applyRollup } from "./nodesStore.js";
+import { rollupOf } from "./nodesRollup.js";
 
 const fail = (res, status, message) =>
 	res.status(status).json({ success: false, message });
@@ -37,6 +38,7 @@ export const patchShowNode = async (req, res) => {
 		}
 
 		const marks = await loadMarks(client, showId);
+		const wasRolled = !!rollupOf(show.seasons, marks);
 		const prev = marks.get(anilistId) ?? {
 			mu: null,
 			phi: null,
@@ -63,7 +65,7 @@ export const patchShowNode = async (req, res) => {
 		await writeMark(client, showId, anilistId, next);
 		marks.set(anilistId, next);
 
-		await applyRollup(client, showId, show.seasons, marks);
+		await applyRollup(client, showId, show.seasons, marks, wasRolled);
 		// a mark is the user touching the item, the same as a score or a note
 		if (!indirectUpdate) {
 			await client.query(`UPDATE shows SET last_updated=$1 WHERE id=$2`, [

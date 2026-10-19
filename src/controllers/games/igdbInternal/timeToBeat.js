@@ -14,7 +14,8 @@ export async function getTimesToBeat(igdbIds) {
 		return Object.fromEntries(
 			(rows ?? []).map((row) => {
 				const seconds = row.normally || row.hastily || row.completely;
-				return [row.game_id, seconds ? Math.round(seconds / 60) : null];
+				// under half a minute rounds to 0
+				return [row.game_id, Math.round((seconds ?? 0) / 60) || null];
 			}),
 		);
 	} catch (error) {
