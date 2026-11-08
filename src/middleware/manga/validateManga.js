@@ -1,6 +1,12 @@
 const MAX_NOTE_LENGTH = 1000;
 const MAX_CHAPTER = 100000;
-const VALID_STATUSES = ["Reading", "Want to Read", "Completed", "Dropped"];
+const VALID_STATUSES = [
+	"Reading",
+	"Want to Read",
+	"Completed",
+	"On Hold",
+	"Dropped",
+];
 
 const badChapter = (value) =>
 	!Number.isInteger(value) || value < 0 || value > MAX_CHAPTER;
@@ -118,7 +124,7 @@ export const validateMangaPatch = (req, res, next) => {
 		return res.status(400).json({
 			success: false,
 			message:
-				"Invalid status field provided ('Reading' | 'Want to Read' | 'Completed' | 'Dropped')",
+				"Invalid status field provided ('Reading' | 'Want to Read' | 'Completed' | 'On Hold' | 'Dropped')",
 		});
 	}
 	// check if exists
@@ -226,7 +232,7 @@ export const validateMangaCreate = (req, res, next) => {
 			return res.status(400).json({
 				success: false,
 				message:
-					"Invalid status provided ('Reading' | 'Want to Read' | 'Completed' | 'Dropped')",
+					"Invalid status provided ('Reading' | 'Want to Read' | 'Completed' | 'On Hold' | 'Dropped')",
 			});
 		}
 	}

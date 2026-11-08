@@ -63,8 +63,9 @@ export const getMangaList = async (req, res) => {
           WHEN 'Reading' THEN 1
           WHEN 'Want to Read' THEN 2
           WHEN 'Completed' THEN 3
-          WHEN 'Dropped' THEN 4
-          ELSE 5
+          WHEN 'On Hold' THEN 4
+          WHEN 'Dropped' THEN 5
+          ELSE 6
         END,
         CASE
           WHEN status = 'Completed' THEN date_completed
